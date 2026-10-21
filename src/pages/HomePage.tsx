@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ArrowRight,
   Download,
@@ -18,16 +18,13 @@ import { PdfBundleSheetArt } from '../components/PdfBundleSheetArt';
 const easeOutEditorial = [0.22, 1, 0.36, 1] as const;
 
 export const HomePage: React.FC = () => {
-  const shouldReduceMotion = useReducedMotion();
   // Homepage showcase: strictly maximum 3 featured products per specification
   const showcaseProducts = PRODUCTS.filter(p => p.publicationStatus === 'published').slice(0, 3);
-  const heroPrimaryBundle = PRODUCTS[0];
-  const heroSecondaryBundle = PRODUCTS[1];
 
   return (
     <div className="space-y-16 sm:space-y-24">
-      {/* 1. HOMEPAGE HERO — CLEAN, PRODUCT-CENTRIC & FLOATING MOTION */}
-      <section className="relative overflow-hidden pt-8 sm:pt-14 pb-14 sm:pb-20 border-b border-charcoal/10 bg-gradient-to-b from-white via-ivory to-ivory">
+      {/* 1. HOMEPAGE HERO — CLEAN, PRODUCT-CENTRIC WITH PROMINENT HERO BANNER */}
+      <section className="relative overflow-hidden pt-8 sm:pt-14 pb-12 sm:pb-16 border-b border-charcoal/10 bg-gradient-to-b from-white via-ivory to-ivory">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center space-y-6">
             {/* Heading */}
@@ -91,64 +88,29 @@ export const HomePage: React.FC = () => {
             </motion.div>
           </div>
 
-          {/* Floating Hero Artwork Composition with Parallax Motion */}
-          <div className="mt-12 sm:mt-16 max-w-3xl mx-auto relative">
-            {/* Secondary offset preview card with subtle floating parallax */}
-            <motion.div
-              animate={
-                shouldReduceMotion
-                  ? {}
-                  : {
-                      y: [0, 10, 0],
-                      rotate: [3, 4.5, 3],
-                      transition: {
-                        duration: 8,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                      },
-                    }
-              }
-              className="hidden sm:block absolute -top-6 -right-6 w-[70%] rounded-2xl overflow-hidden shadow-editorial border border-charcoal/15 opacity-80 pointer-events-none z-0"
-            >
-              <PdfBundleSheetArt sheet={heroSecondaryBundle.coverPreview} variant="hero" />
-            </motion.div>
-
-            {/* Primary interactive bundle showcase with floating motion */}
-            <motion.div
-              animate={
-                shouldReduceMotion
-                  ? {}
-                  : {
-                      y: [0, -8, 0],
-                      transition: {
-                        duration: 6,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                      },
-                    }
-              }
-              className="relative z-10 rounded-2xl overflow-hidden shadow-editorial-hover border border-charcoal/20 bg-white"
-            >
-              <PdfBundleSheetArt sheet={heroPrimaryBundle.coverPreview} variant="hero" />
-              <div className="p-4 sm:p-5 bg-white border-t border-charcoal/10 flex items-center justify-between gap-4">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-brandBlue-dark">
-                    Featured Studio Bundle · {heroPrimaryBundle.verifiedPageCount} Pages
-                  </span>
-                  <h2 className="font-heading font-bold text-base sm:text-lg text-charcoal">
-                    {heroPrimaryBundle.name}
-                  </h2>
-                </div>
-                <Link
-                  to={`/product/${heroPrimaryBundle.slug}`}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors"
-                >
-                  <span>Preview Bundle</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+          {/* Hero Banner Image — Wide, Impactful Creative Showcase */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.2, ease: easeOutEditorial }}
+            className="mt-10 sm:mt-12 max-w-5xl lg:max-w-6xl mx-auto"
+          >
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-charcoal/15 bg-white shadow-editorial">
+              <div className="relative aspect-[16/10] sm:aspect-[16/9] lg:aspect-[2.1/1] w-full max-h-[500px] overflow-hidden bg-ivory">
+                <img
+                  src="/images/Screenshot%20(6).png"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = '/images/screenshot.png';
+                  }}
+                  alt="Two Kids Design creative digital PDF bundle collection banner"
+                  className="w-full h-full object-cover object-center select-none"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                />
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 

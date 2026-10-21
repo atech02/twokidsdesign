@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   PRODUCTS,
   CURATED_COLLECTIONS,
@@ -90,9 +91,18 @@ function runUiUxTestSuite() {
     assert.equal(calculateItemPrice(product, 'commercial'), product.price);
     assert.equal(calculateItemPrice(product, 'personal'), product.price);
   }
-  console.log('PASS [UI 6/6]: Pricing in ZMW, single Standard Commercial Use Licence, and core data verified');
+  // Test 7: Hero Banner Image Asset Verification
+  assert.ok(fs.existsSync('images/Screenshot (6).png'), 'Hero banner source image images/Screenshot (6).png must exist');
+  assert.ok(fs.existsSync('public/images/Screenshot (6).png'), 'Hero banner public asset public/images/Screenshot (6).png must exist');
+  const buf = fs.readFileSync('images/Screenshot (6).png');
+  const width = buf.readUInt32BE(16);
+  const height = buf.readUInt32BE(20);
+  assert.equal(width, 1366, 'Hero banner width must be 1366px');
+  assert.equal(height, 768, 'Hero banner height must be 768px');
+  assert.ok(width / height > 1.7, 'Hero banner must have widescreen landscape proportions (~16:9)');
+  console.log('PASS [UI 7/7]: Hero banner image asset verified (1366x768 widescreen landscape)');
 
-  console.log('=== ALL 6 UI/UX & CATALOGUE TESTS PASSED ===');
+  console.log('=== ALL 7 UI/UX & CATALOGUE TESTS PASSED ===');
 }
 
 runUiUxTestSuite();
