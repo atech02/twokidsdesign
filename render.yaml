@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: twokidsdesign-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npx tsx server/index.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LIPILA_ENV
+        value: production
+      - key: LIPILA_BASE_URL
+        value: https://blz.lipila.io
+      - key: STORE_NAME
+        value: Two Kids Design
+      - key: STORE_URL
+        value: https://twokidsdesign.web.app
+      - key: LIPILA_CALLBACK_URL
+        value: https://twokidsdesign.web.app/api/webhooks/lipila
+      - key: lipila_secret_api
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ORDER_EMAIL_FROM
+        value: Two Kids Design <orders@twokidsdesign.com>
