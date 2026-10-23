@@ -47,11 +47,31 @@ export async function safeFetchJson<T>(
   try {
     const res = await fetch(url, options);
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
-    const isJson = contentType.includes('application/json');
+    const rawText = await res.text();
+    const trimmedText = rawText.trim();
 
-    if (isJson) {
+    // Catch any HTML response (from Firebase SPA rewrite, 404, or proxy error pages)
+    const isHtml =
+      contentType.includes('text/html') ||
+      trimmedText.toLowerCase().startsWith('<!doctype') ||
+      trimmedText.toLowerCase().startsWith('<html') ||
+      trimmedText.startsWith('<');
+
+    if (isHtml) {
+      return {
+        ok: false,
+        status: res.status,
+        contentType,
+        isHtmlFallback: true,
+        error:
+          'Payment service is temporarily unreachable (received HTML instead of API response). Please verify your connection or try again shortly.',
+      };
+    }
+
+    const isJson = contentType.includes('application/json');
+    if (isJson || trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
       try {
-        const data = (await res.json()) as T;
+        const data = JSON.parse(trimmedText) as T;
         return {
           ok: res.ok,
           status: res.status,
@@ -70,26 +90,17 @@ export async function safeFetchJson<T>(
           status: res.status,
           contentType,
           isHtmlFallback: false,
-          error: 'The server returned invalid JSON. Please try again.',
+          error: 'The server returned an unparseable response format. Please try again.',
         };
       }
     }
-
-    // Response is NOT application/json (e.g. text/html from static SPA rewrite or proxy error page)
-    const textPreview = await res.text().catch(() => '');
-    const isHtml =
-      contentType.includes('text/html') ||
-      textPreview.trim().toLowerCase().startsWith('<!doctype') ||
-      textPreview.trim().toLowerCase().startsWith('<html');
 
     return {
       ok: false,
       status: res.status,
       contentType,
-      isHtmlFallback: isHtml,
-      error: isHtml
-        ? 'The backend server returned an HTML page (SPA fallback) instead of an API response.'
-        : `Unexpected response format from server (${contentType || 'non-JSON'}).`,
+      isHtmlFallback: false,
+      error: `Unexpected response format from server (${contentType || 'non-JSON'}).`,
     };
   } catch (err) {
     return {
@@ -289,10 +300,10 @@ export async function lookupCustomerOrders(
   try {
     const query = new URLSearchParams({ email: email.trim() });
     if (orderId?.trim()) query.set('orderId', orderId.trim());
-    const res = await fetch(`/api/orders/lookup?${query.toString()}`);
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await res.json();
+    const res = await safeFetchJson<{ orders?: OrderRecord[]; error?: string }>(
+      `/api/orders/lookup?${query.toString()}`
+    );
+    if (res.data) {
       if (!res.ok) {
         const localMatches = getBackupOrders().filter(
           o =>
@@ -301,9 +312,9 @@ export async function lookupCustomerOrders(
             (!orderId?.trim() || o.orderId.toLowerCase() === orderId.trim().toLowerCase())
         );
         if (localMatches.length > 0) return { orders: localMatches };
-        return { orders: [], error: data.error || 'No matching orders found.' };
+        return { orders: [], error: res.data.error || 'No matching orders found.' };
       }
-      const serverOrders: OrderRecord[] = data.orders || [];
+      const serverOrders: OrderRecord[] = res.data.orders || [];
       const localMatches = getBackupOrders().filter(
         o =>
           o.paymentStatus === 'successful' &&
@@ -348,8 +359,8 @@ export async function triggerProtectedPdfDownload(params: {
   }
 
   try {
-    const res = await fetch(`/api/download/${encodeURIComponent(params.downloadToken)}`);
-    const contentType = res.headers.get('content-type') || '';
+    const res = await fetch(`${API_BASE_URL}/api/download/${encodeURIComponent(params.downloadToken)}`);
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
 
     if (res.ok && contentType.includes('application/pdf')) {
       const blob = await res.blob();
@@ -364,9 +375,14 @@ export async function triggerProtectedPdfDownload(params: {
       return { ok: true };
     }
 
-    if (contentType.includes('application/json')) {
-      const errData = await res.json();
-      return { ok: false, error: errData.error || 'Unable to authorize PDF download.' };
+    const rawErr = await res.text().catch(() => '');
+    if (contentType.includes('application/json') || rawErr.trim().startsWith('{')) {
+      try {
+        const errData = JSON.parse(rawErr);
+        return { ok: false, error: errData.error || 'Unable to authorize PDF download.' };
+      } catch {
+        // ignore parse error
+      }
     }
   } catch {
     // Static hosting fallback
@@ -416,19 +432,17 @@ export async function refreshOrderTokensRequest(
   email: string
 ): Promise<{ order?: OrderRecord; error?: string }> {
   try {
-    const res = await fetch('/api/orders/refresh-token', {
+    const res = await safeFetchJson<{ order?: OrderRecord; error?: string }>('/api/orders/refresh-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, email }),
     });
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await res.json();
-      if (res.ok && data.order) {
-        saveBackupOrder(data.order);
-        return { order: data.order };
+    if (res.data) {
+      if (res.ok && res.data.order) {
+        saveBackupOrder(res.data.order);
+        return { order: res.data.order };
       }
-      return { error: data.error || 'Could not refresh download tokens.' };
+      return { error: res.data.error || 'Could not refresh download tokens.' };
     }
   } catch {
     // fallback

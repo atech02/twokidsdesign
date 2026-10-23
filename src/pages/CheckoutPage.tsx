@@ -89,6 +89,20 @@ export const CheckoutPage: React.FC = () => {
     };
   }, [pendingOrderId, clearCart, navigate]);
 
+  const sanitizeErrorMessage = (msg?: string): string => {
+    if (!msg) return 'Unable to complete transaction. Please try again.';
+    if (
+      msg.includes('Unexpected token') ||
+      msg.includes('<!doctype') ||
+      msg.includes('<html') ||
+      msg.includes('is not valid JSON') ||
+      msg.includes('SPA fallback')
+    ) {
+      return 'The payment gateway is temporarily unreachable. Please check your connection or try again shortly.';
+    }
+    return msg;
+  };
+
   const handleStartPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -137,7 +151,7 @@ export const CheckoutPage: React.FC = () => {
       });
 
       if (!orderRes.success || !orderRes.order) {
-        setErrorMessage(orderRes.error || 'Unable to create order. Please try again.');
+        setErrorMessage(sanitizeErrorMessage(orderRes.error));
         setIsSubmitting(false);
         return;
       }
@@ -149,7 +163,7 @@ export const CheckoutPage: React.FC = () => {
         const cardRes = await initiateLipilaCardPayment(order.orderId);
         if (!cardRes.success || !cardRes.cardRedirectionUrl) {
           setErrorMessage(
-            cardRes.error || 'Failed to initialize card payment with Lipila. Please try again.'
+            sanitizeErrorMessage(cardRes.error || 'Failed to initialize card payment with Lipila. Please try again.')
           );
           setIsSubmitting(false);
           return;
@@ -178,7 +192,7 @@ export const CheckoutPage: React.FC = () => {
         const momoRes = await initiateLipilaMobileMoneyPayment(order.orderId, mobileNumber);
         if (!momoRes.success) {
           setErrorMessage(
-            momoRes.error || 'Failed to send mobile money prompt. Please check your number.'
+            sanitizeErrorMessage(momoRes.error || 'Failed to send mobile money prompt. Please check your number.')
           );
           setIsSubmitting(false);
           return;
@@ -190,8 +204,9 @@ export const CheckoutPage: React.FC = () => {
             'Payment request sent to your mobile phone. Please check your phone now and enter your PIN to approve the transaction.'
         );
       }
-    } catch {
-      setErrorMessage('A network error occurred while connecting to the payment gateway.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      setErrorMessage(sanitizeErrorMessage(msg));
       setIsSubmitting(false);
     }
   };
