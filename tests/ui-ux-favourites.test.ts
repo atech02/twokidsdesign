@@ -91,16 +91,22 @@ function runUiUxTestSuite() {
     assert.equal(calculateItemPrice(product, 'commercial'), product.price);
     assert.equal(calculateItemPrice(product, 'personal'), product.price);
   }
-  // Test 7: Hero Background Image Asset Verification (images/heroimg.png)
-  assert.ok(fs.existsSync('images/heroimg.png'), 'Hero background source image images/heroimg.png must exist');
-  assert.ok(fs.existsSync('public/images/heroimg.png'), 'Hero background public asset public/images/heroimg.png must exist');
-  const buf = fs.readFileSync('images/heroimg.png');
-  const width = buf.readUInt32BE(16);
-  const height = buf.readUInt32BE(20);
-  assert.equal(width, 1536, 'Hero background width must be 1536px');
-  assert.equal(height, 1024, 'Hero background height must be 1024px');
-  assert.equal((width / height).toFixed(2), '1.50', 'Hero background must have 3:2 landscape proportions');
-  console.log('PASS [UI 7/7]: Hero background image asset verified (1536x1024 landscape)');
+  // Test 7: Hero Background Image Asset Verification (images/heroimg.jpg)
+  assert.ok(fs.existsSync('images/heroimg.jpg'), 'Hero background source image images/heroimg.jpg must exist');
+  assert.ok(fs.existsSync('public/images/heroimg.jpg'), 'Hero background public asset public/images/heroimg.jpg must exist');
+  const buf = fs.readFileSync('images/heroimg.jpg');
+  let width = 0;
+  let height = 0;
+  for (let i = 0; i < buf.length - 8; i++) {
+    if (buf[i] === 0xFF && (buf[i + 1] >= 0xC0 && buf[i + 1] <= 0xC3)) {
+      height = buf.readUInt16BE(i + 5);
+      width = buf.readUInt16BE(i + 7);
+      break;
+    }
+  }
+  assert.equal(width, 2752, 'Hero background width must be 2752px');
+  assert.equal(height, 1536, 'Hero background height must be 1536px');
+  console.log(`PASS [UI 7/7]: Hero background image asset verified (${width}x${height} JPEG)`);
 
   console.log('=== ALL 7 UI/UX & CATALOGUE TESTS PASSED ===');
 }
