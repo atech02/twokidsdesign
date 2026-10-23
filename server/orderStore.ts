@@ -78,16 +78,20 @@ export interface OrderRecord {
 const SECRET_SIGNING_KEY =
   process.env.DOWNLOAD_TOKEN_SECRET || 'tkd-local-server-hmac-secret-2026-key';
 const DATA_FILE = path.resolve(process.cwd(), 'server', '.orders-store.json');
+const TMP_DATA_FILE = path.resolve(
+  process.env.TMPDIR || process.env.TEMP || '/tmp',
+  '.tkd-orders-store.json'
+);
 
 // In-memory cache synced with disk for atomic operations & persistence
 const ordersById = new Map<string, OrderRecord>();
 const ordersByReferenceId = new Map<string, string>();
 const ordersByIdempotencyKey = new Map<string, string>();
 
-function loadPersistedOrders() {
+function loadOrdersFromPath(filePath: string) {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed: OrderRecord[] = JSON.parse(raw);
       for (const order of parsed) {
         ordersById.set(order.orderId, order);
@@ -100,20 +104,42 @@ function loadPersistedOrders() {
       }
     }
   } catch {
-    // Ignore read errors on cold start
+    // Ignore read errors
+  }
+}
+
+function loadPersistedOrders() {
+  loadOrdersFromPath(DATA_FILE);
+  if (DATA_FILE !== TMP_DATA_FILE) {
+    loadOrdersFromPath(TMP_DATA_FILE);
   }
 }
 
 function persistOrders() {
+  const list = Array.from(ordersById.values());
+  const serialized = JSON.stringify(list, null, 2);
+
+  // Attempt writing to primary location (local dev / persistent server)
   try {
     const dir = path.dirname(DATA_FILE);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const list = Array.from(ordersById.values());
-    fs.writeFileSync(DATA_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    fs.writeFileSync(DATA_FILE, serialized, 'utf-8');
+    return;
   } catch {
-    // Non-fatal in read-only environments
+    // Falls through to writable serverless /tmp directory
+  }
+
+  // Fallback to /tmp in serverless environments (Netlify / AWS Lambda)
+  try {
+    const tmpDir = path.dirname(TMP_DATA_FILE);
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    fs.writeFileSync(TMP_DATA_FILE, serialized, 'utf-8');
+  } catch {
+    // In-memory map remains authoritative for the lifecycle of the instance
   }
 }
 

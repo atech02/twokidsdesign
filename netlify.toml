@@ -1,0 +1,22 @@
+# ==============================================================================
+# TWO KIDS DESIGN — NETLIFY BACKEND SERVERLESS CONFIGURATION
+# ==============================================================================
+
+[build]
+  functions = "netlify/functions"
+
+# Seamlessly rewrite all /api/* requests to the Netlify API Function
+# Ensures frontend calls ${API_BASE_URL}/api/... without duplicate path segments
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Global CORS headers across all API endpoints
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS, PUT, DELETE"
+    Access-Control-Allow-Headers = "Content-Type, Authorization, x-api-key, accept"
+    Access-Control-Max-Age = "86400"
