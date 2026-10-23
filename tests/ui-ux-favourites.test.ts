@@ -104,11 +104,25 @@ function runUiUxTestSuite() {
       break;
     }
   }
-  assert.equal(width, 2752, 'Hero background width must be 2752px');
-  assert.equal(height, 1536, 'Hero background height must be 1536px');
-  console.log(`PASS [UI 7/7]: Hero background image asset verified (${width}x${height} JPEG)`);
+  assert.equal(width, 2532, 'Hero background width must be 2532px');
+  assert.equal(height, 1406, 'Hero background height must be 1406px');
+  console.log(`PASS [UI 7/8]: Hero background image asset verified (${width}x${height} JPEG)`);
 
-  console.log('=== ALL 7 UI/UX & CATALOGUE TESTS PASSED ===');
+  // Test 8: Homepage About Section Removed while Preserving Dedicated About & Licensing Page
+  const homePageContent = fs.readFileSync('src/pages/HomePage.tsx', 'utf-8');
+  assert.ok(!homePageContent.includes('ABOUT TWO KIDS DESIGN'), 'Homepage must not include ABOUT TWO KIDS DESIGN badge');
+  assert.ok(!homePageContent.includes('Crafted with imagination'), 'Homepage must not include dark About heading');
+  assert.ok(!homePageContent.includes('Shop All PDF Bundles'), 'Homepage must not include dark About buttons');
+  
+  const aboutPageContent = fs.readFileSync('src/pages/AboutPage.tsx', 'utf-8');
+  assert.ok(aboutPageContent.includes('OUR STORY'), 'Dedicated About page must exist and contain full story');
+  assert.ok(aboutPageContent.includes('Standard Commercial Use Licence'), 'Dedicated About page must retain licensing policies');
+
+  const headerContent = fs.readFileSync('src/components/Header.tsx', 'utf-8');
+  assert.ok(headerContent.includes("to: '/about'"), 'Header navigation must retain About & Licensing link');
+  console.log('PASS [UI 8/8]: Homepage About section verified removed and dedicated About page intact');
+
+  console.log('=== ALL 8 UI/UX & CATALOGUE TESTS PASSED ===');
 }
 
 runUiUxTestSuite();

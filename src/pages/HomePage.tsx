@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
-  Sparkles,
   Printer,
   Layers,
   Briefcase,
@@ -249,55 +248,6 @@ export const HomePage: React.FC = () => {
               </h3>
               <p className="text-sm text-charcoal/75 mt-2 leading-relaxed">
                 Download your licensed PDF bundle immediately on your order confirmation page, or retrieve it anytime via Customer Downloads.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. BRAND STORY & STUDIO INTRODUCTION */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-3xl bg-charcoal text-ivory p-8 sm:p-12 lg:p-16 border border-charcoal shadow-editorial overflow-hidden relative">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-8 space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-brandBlue">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>ABOUT TWO KIDS DESIGN</span>
-              </div>
-              <h2 className="font-heading font-extrabold text-3xl sm:text-4xl text-white leading-tight">
-                Crafted with imagination. Engineered for everyday makers and creative businesses.
-              </h2>
-              <p className="text-base sm:text-lg text-ivory/85 leading-relaxed max-w-2xl">
-                At Two Kids Design, we create fun and professionally crafted digital products for crafters, entrepreneurs, and print-on-demand businesses. Every PDF bundle is organized for clarity, effortless printing, and real-world creative utility—helping you bring your ideas to life without starting from a blank page.
-              </p>
-              <div className="pt-3 flex flex-wrap gap-3">
-                <Link
-                  to="/shop"
-                  className="inline-flex items-center gap-2 rounded-xl bg-brandBlue px-5 py-3 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors"
-                >
-                  <span>Shop All PDF Bundles</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                  to="/about"
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/20 transition-colors"
-                >
-                  <span>Read Licensing &amp; Policies</span>
-                </Link>
-              </div>
-            </div>
-
-            <div className="lg:col-span-4 flex flex-col items-center justify-center bg-white/5 rounded-2xl p-6 border border-white/10 text-center">
-              <img
-                src="/images/logo.jpeg"
-                alt="Two Kids Design Official Logo"
-                className="w-28 h-28 rounded-full object-cover border-2 border-brandBlue shadow-md mb-4"
-              />
-              <p className="font-heading font-bold text-base text-white">
-                Two Kids Design Studio
-              </p>
-              <p className="text-xs text-ivory/70 mt-1">
-                Digital PDF Bundles · Instant Download
               </p>
             </div>
           </div>
