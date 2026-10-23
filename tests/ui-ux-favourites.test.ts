@@ -12,26 +12,39 @@ import {
 function runUiUxTestSuite() {
   console.log('=== Two Kids Design — UI/UX Redesign & Catalogue Verification Suite ===');
 
-  // Test 1: Curated Collections Specification (Exactly 3: Apparel, Home Decor, Stationery)
-  assert.equal(CURATED_COLLECTIONS.length, 3, 'Must have exactly 3 curated collections');
+  // Test 1: Curated Collections Specification (Exactly 4: Apparel, Home Decor, Accessory, Stationery)
+  assert.equal(CURATED_COLLECTIONS.length, 4, 'Must have exactly 4 curated collections');
   const collectionIds = CURATED_COLLECTIONS.map(c => c.id);
-  assert.deepEqual(collectionIds, ['apparel', 'home-decor', 'stationery']);
+  assert.deepEqual(collectionIds, ['apparel', 'home-decor', 'accessory', 'stationery']);
   
   const apparel = getCuratedCollection('apparel')!;
   assert.equal(apparel.name, 'Apparel');
   assert.ok(apparel.description.includes('Clothing graphics'), 'Apparel description must match specification');
-  assert.ok(apparel.leadProductId, 'Apparel must have a lead product ID for attractive artwork preview');
+  assert.equal(apparel.image, '/images/apparel.jpg');
 
   const homeDecor = getCuratedCollection('home-decor')!;
   assert.equal(homeDecor.name, 'Home Decor');
   assert.ok(homeDecor.description.includes('Printable artwork'), 'Home Decor description must match specification');
-  assert.ok(homeDecor.leadProductId, 'Home Decor must have a lead product ID for attractive artwork preview');
+  assert.equal(homeDecor.image, '/images/homedecor.jpg');
+
+  const accessory = getCuratedCollection('accessory')!;
+  assert.equal(accessory.name, 'Accessory');
+  assert.ok(accessory.description.includes('Bags, phone cases, tote bags'), 'Accessory description must match specification');
+  assert.equal(accessory.image, '/images/accessory.jpg');
 
   const stationery = getCuratedCollection('stationery')!;
   assert.equal(stationery.name, 'Stationery');
   assert.ok(stationery.description.includes('Cards, labels, planners'), 'Stationery description must match specification');
-  assert.ok(stationery.leadProductId, 'Stationery must have a lead product ID for attractive artwork preview');
-  console.log('PASS [UI 1/6]: Exactly 3 Curated Collections defined with artwork previews and accurate descriptions');
+  assert.equal(stationery.image, '/images/stationery.jpg');
+
+  // Verify all collection mockup images exist
+  for (const col of CURATED_COLLECTIONS) {
+    const rawPath = col.image.replace(/^\//, '');
+    assert.ok(fs.existsSync(rawPath), `Collection image ${rawPath} must exist in public/`);
+    const sourcePath = rawPath.replace(/^public\//, '');
+    assert.ok(fs.existsSync(sourcePath), `Collection source image ${sourcePath} must exist in images/`);
+  }
+  console.log('PASS [UI 1/6]: Exactly 4 Curated Collections defined with verified mockup images');
 
   // Test 2: Product coverage across curated collections
   for (const col of CURATED_COLLECTIONS) {
@@ -120,9 +133,33 @@ function runUiUxTestSuite() {
 
   const headerContent = fs.readFileSync('src/components/Header.tsx', 'utf-8');
   assert.ok(headerContent.includes("to: '/about'"), 'Header navigation must retain About & Licensing link');
-  console.log('PASS [UI 8/8]: Homepage About section verified removed and dedicated About page intact');
+  console.log('PASS [UI 8/9]: Homepage About section verified removed and dedicated About page intact');
 
-  console.log('=== ALL 8 UI/UX & CATALOGUE TESTS PASSED ===');
+  // Test 9: Logo Simplification & 4 Collections in Footer & Homepage
+  assert.ok(!headerContent.includes('Digital PDF Studio'), 'Header must not contain text Digital PDF Studio');
+  assert.ok(!headerContent.includes('font-heading font-extrabold text-base sm:text-lg tracking-tight text-charcoal'), 'Header must not contain text heading beside logo');
+  assert.ok(headerContent.includes('src="/images/logo.jpeg"'), 'Header must contain logo image');
+
+  const footerContent = fs.readFileSync('src/components/Footer.tsx', 'utf-8');
+  assert.ok(!footerContent.includes('Digital Creations &amp; PDF Bundles'), 'Footer must not contain text Digital Creations & PDF Bundles');
+  assert.ok(footerContent.includes('src="/images/logo.jpeg"'), 'Footer must contain logo image');
+  assert.ok(footerContent.includes('/shop?collection=apparel'));
+  assert.ok(footerContent.includes('/shop?collection=home-decor'));
+  assert.ok(footerContent.includes('/shop?collection=accessory'));
+  assert.ok(footerContent.includes('/shop?collection=stationery'));
+
+  // Ensure footer collections appear in exact specified order
+  const idxApparel = footerContent.indexOf('/shop?collection=apparel');
+  const idxHomeDecor = footerContent.indexOf('/shop?collection=home-decor');
+  const idxAccessory = footerContent.indexOf('/shop?collection=accessory');
+  const idxStationery = footerContent.indexOf('/shop?collection=stationery');
+  assert.ok(idxApparel < idxHomeDecor, 'Apparel must appear before Home Decor');
+  assert.ok(idxHomeDecor < idxAccessory, 'Home Decor must appear before Accessory');
+  assert.ok(idxAccessory < idxStationery, 'Accessory must appear before Stationery');
+
+  console.log('PASS [UI 9/9]: Navbar and footer logos simplified and 4 collections verified in exact order');
+
+  console.log('=== ALL 9 UI/UX & CATALOGUE TESTS PASSED ===');
 }
 
 runUiUxTestSuite();

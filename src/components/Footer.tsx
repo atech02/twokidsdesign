@@ -9,20 +9,12 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 pb-12 border-b border-white/10">
           {/* Brand Column */}
           <div className="lg:col-span-5 space-y-4">
-            <Link to="/" className="inline-flex items-center gap-3 group">
+            <Link to="/" className="inline-flex items-center group" aria-label="Two Kids Design Home">
               <img
                 src="/images/logo.jpeg"
                 alt="Two Kids Design Official Logo"
-                className="w-12 h-12 rounded-full object-cover border border-white/20"
+                className="w-14 h-14 rounded-full object-cover border border-white/20 shadow-md group-hover:scale-105 transition-transform"
               />
-              <div>
-                <span className="font-heading font-extrabold text-xl text-white tracking-tight block">
-                  Two Kids <span className="text-brandBlue">Design</span>
-                </span>
-                <span className="text-xs text-ivory/65 uppercase tracking-widest">
-                  Digital Creations &amp; PDF Bundles
-                </span>
-              </div>
             </Link>
             <p className="text-sm text-ivory/80 max-w-md leading-relaxed">
               At Two Kids Design, we create fun and professionally crafted digital products for crafters, entrepreneurs, and print-on-demand businesses.
@@ -76,6 +68,11 @@ export const Footer: React.FC = () => {
               <li>
                 <Link to="/shop?collection=home-decor" className="hover:text-white transition-colors">
                   Home Decor
+                </Link>
+              </li>
+              <li>
+                <Link to="/shop?collection=accessory" className="hover:text-white transition-colors">
+                  Accessory
                 </Link>
               </li>
               <li>

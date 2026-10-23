@@ -583,7 +583,7 @@ export function formatPrice(amount: number, currency = 'ZMW'): string {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
-export type CuratedCollectionId = 'apparel' | 'home-decor' | 'stationery';
+export type CuratedCollectionId = 'apparel' | 'home-decor' | 'accessory' | 'stationery';
 
 export interface CuratedCollection {
   id: CuratedCollectionId;
@@ -591,6 +591,7 @@ export interface CuratedCollection {
   tagline: string;
   description: string;
   accentBg: string;
+  image: string;
   productIds: string[];
   leadProductId: string;
 }
@@ -602,6 +603,7 @@ export const CURATED_COLLECTIONS: CuratedCollection[] = [
     tagline: 'Clothing graphics & garment designs',
     description: 'Clothing graphics, garment designs and wearable creative projects.',
     accentBg: 'bg-lavender/40 hover:bg-lavender/60 border-lavender/60',
+    image: '/images/apparel.jpg',
     productIds: ['tkd-bundle-02', 'tkd-bundle-06'],
     leadProductId: 'tkd-bundle-02',
   },
@@ -611,8 +613,19 @@ export const CURATED_COLLECTIONS: CuratedCollection[] = [
     tagline: 'Printable artwork & living spaces',
     description: 'Printable artwork and creative designs for decorating living spaces.',
     accentBg: 'bg-mint/40 hover:bg-mint/60 border-mint/60',
+    image: '/images/homedecor.jpg',
     productIds: ['tkd-bundle-02', 'tkd-bundle-05', 'tkd-bundle-06'],
     leadProductId: 'tkd-bundle-05',
+  },
+  {
+    id: 'accessory',
+    name: 'Accessory',
+    tagline: 'Bags, phone cases, totes & daily essentials',
+    description: 'Bags, phone cases, tote bags and creative designs for daily accessories.',
+    accentBg: 'bg-warmYellow/40 hover:bg-warmYellow/60 border-warmYellow/60',
+    image: '/images/accessory.jpg',
+    productIds: ['tkd-bundle-01', 'tkd-bundle-02', 'tkd-bundle-06'],
+    leadProductId: 'tkd-bundle-02',
   },
   {
     id: 'stationery',
@@ -620,6 +633,7 @@ export const CURATED_COLLECTIONS: CuratedCollection[] = [
     tagline: 'Cards, labels, planners & papercraft',
     description: 'Cards, labels, planners and other paper-based creative projects.',
     accentBg: 'bg-peach/40 hover:bg-peach/60 border-peach/60',
+    image: '/images/stationery.jpg',
     productIds: ['tkd-bundle-01', 'tkd-bundle-03', 'tkd-bundle-04', 'tkd-bundle-05', 'tkd-bundle-06'],
     leadProductId: 'tkd-bundle-01',
   },

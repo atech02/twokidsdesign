@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { PRODUCTS, CURATED_COLLECTIONS } from '../data/products';
 import { ProductCard } from '../components/ProductCard';
-import { PdfBundleSheetArt } from '../components/PdfBundleSheetArt';
 
 const easeOutEditorial = [0.22, 1, 0.36, 1] as const;
 
@@ -82,7 +81,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. CURATED DIGITAL COLLECTIONS (EXACTLY THREE: APPAREL, HOME DECOR, STATIONERY) */}
+      {/* 2. CURATED DIGITAL COLLECTIONS (FOUR COLLECTIONS: APPAREL, HOME DECOR, ACCESSORY, STATIONERY) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
@@ -102,50 +101,33 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {CURATED_COLLECTIONS.map(collection => {
-            const count = collection.productIds.length;
-            const leadProduct = PRODUCTS.find(p => p.id === collection.leadProductId) || PRODUCTS[0];
-            return (
-              <Link
-                key={collection.id}
-                to={`/shop?collection=${collection.id}`}
-                className={`group rounded-2xl p-5 sm:p-6 border transition-all flex flex-col justify-between shadow-editorial hover:shadow-editorial-hover bg-white hover:border-charcoal/20`}
-              >
-                <div>
-                  {/* Category Artwork Preview Image */}
-                  <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden mb-5 border border-charcoal/10 bg-ivory shadow-xs">
-                    <PdfBundleSheetArt
-                      sheet={leadProduct.coverPreview}
-                      variant="card"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 border-0"
-                    />
-                    <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs text-[11px] font-bold uppercase tracking-wider text-charcoal px-2.5 py-1 rounded-full border border-charcoal/10 shadow-2xs">
-                      {count} {count === 1 ? 'Bundle' : 'Bundles'}
-                    </div>
-                  </div>
+        {/* Responsive Grid: 2 cols on mobile/tablet, 4 cols on desktop */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {CURATED_COLLECTIONS.map(collection => (
+            <Link
+              key={collection.id}
+              to={`/shop?collection=${collection.id}`}
+              className="group flex flex-col rounded-2xl bg-white border border-charcoal/10 overflow-hidden shadow-editorial hover:shadow-editorial-hover hover:border-charcoal/20 transition-all duration-300"
+            >
+              {/* Prominent Mockup Image with Consistent Aspect Ratio */}
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-ivory">
+                <img
+                  src={collection.image}
+                  alt={`${collection.name} Collection Mockup`}
+                  className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
 
-                  {/* Title & Tagline */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-heading font-extrabold text-2xl text-charcoal group-hover:text-brandBlue-dark transition-colors">
-                      {collection.name}
-                    </h3>
-                  </div>
-
-                  {/* Short Supporting Description */}
-                  <p className="text-sm text-charcoal/75 mt-2.5 leading-relaxed">
-                    {collection.description}
-                  </p>
-                </div>
-
-                {/* Clickable Action */}
-                <div className="mt-6 pt-4 border-t border-charcoal/10 flex items-center justify-between text-xs font-bold text-charcoal group-hover:text-brandBlue-dark transition-colors">
-                  <span>Explore {collection.name} Designs</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
-            );
-          })}
+              {/* Collection Name Beneath the Image */}
+              <div className="p-4 sm:p-5 text-center flex items-center justify-center bg-white">
+                <h3 className="font-heading font-extrabold text-base sm:text-lg text-charcoal group-hover:text-brandBlue-dark transition-colors tracking-tight">
+                  {collection.name}
+                </h3>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
 

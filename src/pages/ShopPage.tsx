@@ -209,7 +209,7 @@ export const ShopPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Curated Digital Collections Quick-Filters: Strictly Apparel, Home Decor, Stationery */}
+          {/* Curated Digital Collections Quick-Filters: Apparel, Home Decor, Accessory, Stationery */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar" role="tablist" aria-label="Curated collections">
             <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal/50 shrink-0 mr-1 flex items-center gap-1">
               <Filter className="w-3 h-3" />
