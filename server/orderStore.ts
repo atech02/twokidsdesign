@@ -76,7 +76,7 @@ export interface OrderRecord {
 }
 
 const SECRET_SIGNING_KEY =
-  process.env.DOWNLOAD_TOKEN_SECRET || 'tkd-local-server-hmac-secret-2026-key';
+  process.env.DOWNLOAD_TOKEN_SECRET || 'tkd-fallback-signing-key';
 const DATA_FILE = path.resolve(process.cwd(), 'server', '.orders-store.json');
 const TMP_DATA_FILE = path.resolve(
   process.env.TMPDIR || process.env.TEMP || '/tmp',
