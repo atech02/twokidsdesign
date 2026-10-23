@@ -7,7 +7,7 @@
 
 # Secrets scanning configuration: exempt public URLs and server config keys from scanner false-positives
 [build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "DOWNLOAD_TOKEN_SECRET,LIPILA_BASE_URL,LIPILA_CALLBACK_URL"
+  SECRETS_SCAN_OMIT_KEYS = "DOWNLOAD_TOKEN_SECRET,LIPILA_BASE_URL,LIPILA_CALLBACK_URL,LIPILA_ENV"
   SECRETS_SCAN_OMIT_PATHS = ".env.example,render.yaml,tests/**,server/**"
 
 # Seamlessly rewrite all /api/* requests to the Netlify API Function
