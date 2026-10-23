@@ -101,14 +101,185 @@
   box-shadow: 0 2px 8px rgba(32, 32, 32, 0.04);
 }
 
+/* Hero Liquid Glass Primary Action Button */
+.liquid-glass-hero-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 34px;
+  border-radius: 9999px;
+  background: rgba(32, 32, 32, 0.88);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 30px rgba(32, 32, 32, 0.22),
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.65),
+              inset 0 -1px 1px 0 rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+
+.liquid-glass-hero-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-radius: 9999px 9999px 0 0;
+  pointer-events: none;
+}
+
+.liquid-glass-hero-button:hover {
+  background: rgba(34, 135, 184, 0.94);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 12px 36px rgba(34, 135, 184, 0.35),
+              inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.85);
+  transform: translateY(-2px);
+}
+
+.liquid-glass-hero-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Secondary Interactive Glass Button */
+.liquid-glass-btn-secondary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid rgba(32, 32, 32, 0.12);
+  box-shadow: 0 4px 16px rgba(32, 32, 32, 0.05),
+              inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  color: #202020;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.liquid-glass-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(56, 163, 214, 0.45);
+  box-shadow: 0 6px 20px rgba(56, 163, 214, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 1);
+  transform: translateY(-1px);
+}
+
+.liquid-glass-btn-secondary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Liquid Glass Product Card */
+.liquid-glass-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  border: 1px solid rgba(32, 32, 32, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(32, 32, 32, 0.06),
+              inset 0 1px 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.liquid-glass-card:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(56, 163, 214, 0.35);
+  box-shadow: 0 12px 32px -4px rgba(32, 32, 32, 0.1),
+              inset 0 1px 1.5px 0 rgba(255, 255, 255, 1);
+  transform: translateY(-2px);
+}
+
+/* Glass favourite heart button */
+.liquid-glass-heart-btn {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 10px rgba(32, 32, 32, 0.08),
+              inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.liquid-glass-heart-btn:hover {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 4px 14px rgba(32, 32, 32, 0.14);
+  transform: scale(1.08);
+}
+
+/* Hero Background Cinematic Slow Drift Animation */
+@keyframes heroBgPanDrift {
+  0% {
+    transform: scale(1.06) translate3d(0%, 0%, 0);
+  }
+  25% {
+    transform: scale(1.08) translate3d(-1.2%, -0.8%, 0);
+  }
+  50% {
+    transform: scale(1.07) translate3d(1%, -1.4%, 0);
+  }
+  75% {
+    transform: scale(1.08) translate3d(-0.6%, 1%, 0);
+  }
+  100% {
+    transform: scale(1.06) translate3d(0%, 0%, 0);
+  }
+}
+
+.hero-bg-animated {
+  animation: heroBgPanDrift 28s ease-in-out infinite alternate;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+@media (max-width: 640px) {
+  @keyframes heroBgPanDriftMobile {
+    0% {
+      transform: scale(1.04) translate3d(0%, 0%, 0);
+    }
+    50% {
+      transform: scale(1.06) translate3d(0.6%, -0.6%, 0);
+    }
+    100% {
+      transform: scale(1.04) translate3d(0%, 0%, 0);
+    }
+  }
+  .hero-bg-animated {
+    animation: heroBgPanDriftMobile 24s ease-in-out infinite alternate;
+  }
+}
+
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   .liquid-glass-surface,
   .liquid-glass-nav,
   .liquid-glass-control,
-  .liquid-glass-pill {
+  .liquid-glass-pill,
+  .liquid-glass-hero-button,
+  .liquid-glass-btn-secondary,
+  .liquid-glass-card,
+  .liquid-glass-heart-btn {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: #FAF8F3 !important;
+  }
+
+  .liquid-glass-hero-button {
+    background: #202020 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .hero-bg-animated {
+    animation: none !important;
+    transform: scale(1.02) !important;
   }
 }

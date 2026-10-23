@@ -91,16 +91,16 @@ function runUiUxTestSuite() {
     assert.equal(calculateItemPrice(product, 'commercial'), product.price);
     assert.equal(calculateItemPrice(product, 'personal'), product.price);
   }
-  // Test 7: Hero Banner Image Asset Verification
-  assert.ok(fs.existsSync('images/Screenshot (6).png'), 'Hero banner source image images/Screenshot (6).png must exist');
-  assert.ok(fs.existsSync('public/images/Screenshot (6).png'), 'Hero banner public asset public/images/Screenshot (6).png must exist');
-  const buf = fs.readFileSync('images/Screenshot (6).png');
+  // Test 7: Hero Background Image Asset Verification (images/heroimg.png)
+  assert.ok(fs.existsSync('images/heroimg.png'), 'Hero background source image images/heroimg.png must exist');
+  assert.ok(fs.existsSync('public/images/heroimg.png'), 'Hero background public asset public/images/heroimg.png must exist');
+  const buf = fs.readFileSync('images/heroimg.png');
   const width = buf.readUInt32BE(16);
   const height = buf.readUInt32BE(20);
-  assert.equal(width, 1366, 'Hero banner width must be 1366px');
-  assert.equal(height, 768, 'Hero banner height must be 768px');
-  assert.ok(width / height > 1.7, 'Hero banner must have widescreen landscape proportions (~16:9)');
-  console.log('PASS [UI 7/7]: Hero banner image asset verified (1366x768 widescreen landscape)');
+  assert.equal(width, 1536, 'Hero background width must be 1536px');
+  assert.equal(height, 1024, 'Hero background height must be 1024px');
+  assert.equal((width / height).toFixed(2), '1.50', 'Hero background must have 3:2 landscape proportions');
+  console.log('PASS [UI 7/7]: Hero background image asset verified (1536x1024 landscape)');
 
   console.log('=== ALL 7 UI/UX & CATALOGUE TESTS PASSED ===');
 }

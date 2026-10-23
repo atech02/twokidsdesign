@@ -28,11 +28,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className="group relative flex flex-col h-full bg-white rounded-xl border border-charcoal/10 shadow-editorial hover:shadow-editorial-hover transition-all duration-200 overflow-hidden"
+      className="group relative flex flex-col h-full liquid-glass-card rounded-2xl overflow-hidden"
     >
       <Link
         to={`/product/${product.slug}`}
-        className="flex flex-col h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brandBlue rounded-xl"
+        className="flex flex-col h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brandBlue rounded-2xl"
         aria-label={`View ${product.name} PDF Bundle`}
       >
         {/* 1. Artwork Preview with Heart Icon Overlay */}
@@ -45,7 +45,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             />
           </div>
 
-          {/* 4. Heart-shaped Favourite Icon for Guests */}
+          {/* 4. Heart-shaped Favourite Icon for Guests with Liquid Glass Button Effect */}
           <button
             type="button"
             onClick={handleHeartClick}
@@ -55,7 +55,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                 : `Save ${product.name} to favourites`
             }
             title={favourited ? 'Saved in favourites' : 'Save to favourites'}
-            className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 p-1.5 sm:p-2 rounded-full bg-white/95 backdrop-blur-xs border border-charcoal/10 shadow-xs hover:bg-white hover:scale-105 active:scale-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 p-2 sm:p-2.5 rounded-full liquid-glass-heart-btn focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
           >
             <motion.div
               key={favourited ? 'fav-on' : 'fav-off'}

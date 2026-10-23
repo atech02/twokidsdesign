@@ -23,9 +23,26 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="space-y-16 sm:space-y-24">
-      {/* 1. HOMEPAGE HERO — CLEAN, PRODUCT-CENTRIC WITH PROMINENT HERO BANNER */}
-      <section className="relative overflow-hidden pt-8 sm:pt-14 pb-12 sm:pb-16 border-b border-charcoal/10 bg-gradient-to-b from-white via-ivory to-ivory">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* 1. HOMEPAGE HERO — CINEMATIC ANIMATED HEROIMG BACKGROUND & LIQUID GLASS UI */}
+      <section className="relative overflow-hidden border-b border-charcoal/10">
+        {/* Animated Cinematic Hero Background Image */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+          <div className="absolute -inset-4 sm:-inset-8 w-[calc(100%+2rem)] sm:w-[calc(100%+4rem)] h-[calc(100%+2rem)] sm:h-[calc(100%+4rem)] hero-bg-animated">
+            <img
+              src="/images/heroimg.png"
+              alt="Two Kids Design Creative Studio Background"
+              className="w-full h-full object-cover object-[center_35%]"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+            />
+          </div>
+          {/* Soft Neutral Editorial Overlay to Ensure Optimal Typography Contrast */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#FAF8F3]/92 via-[#FAF8F3]/82 to-[#FAF8F3]/96" />
+        </div>
+
+        {/* Hero Foreground Content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-20 pb-16 sm:pb-24">
           <div className="max-w-4xl mx-auto text-center space-y-6">
             {/* Heading */}
             <motion.h1
@@ -45,12 +62,12 @@ export const HomePage: React.FC = () => {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.1, ease: easeOutEditorial }}
-              className="text-base sm:text-lg text-charcoal/75 max-w-2xl mx-auto leading-relaxed"
+              className="text-base sm:text-lg text-charcoal/80 max-w-2xl mx-auto leading-relaxed"
             >
               Discover fun, professionally crafted PDF design bundles made for crafters, entrepreneurs, and print-on-demand creators. Inspect every included sheet, enjoy standard commercial use, and download instantly.
             </motion.p>
 
-            {/* Centered Explore All Designs Button */}
+            {/* Centered Explore All Designs Button with Liquid Glass UI */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -59,58 +76,34 @@ export const HomePage: React.FC = () => {
             >
               <Link
                 to="/shop"
-                className="inline-flex items-center justify-center gap-2.5 rounded-xl bg-charcoal px-8 py-3.5 text-sm sm:text-base font-semibold text-white hover:bg-brandBlue-dark transition-all shadow-editorial hover:shadow-editorial-hover active:scale-[0.99]"
+                className="liquid-glass-hero-button text-sm sm:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-brandBlue"
               >
                 <span>Explore All Designs</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 text-brandBlue" />
               </Link>
             </motion.div>
 
-            {/* Trust & Format Indicators */}
+            {/* Trust & Format Indicators with Liquid Glass Pills */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.25 }}
-              className="pt-4 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-xs text-charcoal/70"
+              className="pt-4 flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs font-semibold text-charcoal/80"
             >
-              <div className="flex items-center gap-2">
-                <FileCheck2 className="w-4 h-4 text-brandBlue" />
+              <div className="liquid-glass-pill px-3.5 py-1.5 flex items-center gap-2">
+                <FileCheck2 className="w-4 h-4 text-brandBlue-dark" />
                 <span>US Letter &amp; A4 PDFs</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Download className="w-4 h-4 text-brandBlue" />
+              <div className="liquid-glass-pill px-3.5 py-1.5 flex items-center gap-2">
+                <Download className="w-4 h-4 text-brandBlue-dark" />
                 <span>Instant Verified Delivery</span>
               </div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-brandBlue" />
+              <div className="liquid-glass-pill px-3.5 py-1.5 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-brandBlue-dark" />
                 <span>Clear Commercial Licences</span>
               </div>
             </motion.div>
           </div>
-
-          {/* Hero Banner Image — Wide, Impactful Creative Showcase */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.2, ease: easeOutEditorial }}
-            className="mt-10 sm:mt-12 max-w-5xl lg:max-w-6xl mx-auto"
-          >
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-charcoal/15 bg-white shadow-editorial">
-              <div className="relative aspect-[16/10] sm:aspect-[16/9] lg:aspect-[2.1/1] w-full max-h-[500px] overflow-hidden bg-ivory">
-                <img
-                  src="/images/Screenshot%20(6).png"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = '/images/screenshot.png';
-                  }}
-                  alt="Two Kids Design creative digital PDF bundle collection banner"
-                  className="w-full h-full object-cover object-center select-none"
-                  loading="eager"
-                  fetchPriority="high"
-                  decoding="async"
-                />
-              </div>
-            </div>
-          </motion.div>
         </div>
       </section>
 
@@ -197,7 +190,7 @@ export const HomePage: React.FC = () => {
           </div>
           <Link
             to="/shop"
-            className="inline-flex items-center justify-center rounded-xl border border-charcoal/20 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-charcoal hover:border-charcoal transition-colors shrink-0"
+            className="liquid-glass-btn-secondary px-4 py-2.5 rounded-xl text-xs sm:text-sm shrink-0"
           >
             Browse All Designs
           </Link>
@@ -214,10 +207,10 @@ export const HomePage: React.FC = () => {
         <div className="flex justify-center pt-10">
           <Link
             to="/shop"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-7 py-3.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-all shadow-editorial active:scale-[0.99]"
+            className="liquid-glass-hero-button text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brandBlue"
           >
             <span>Explore All Designs</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4 text-brandBlue" />
           </Link>
         </div>
       </section>
