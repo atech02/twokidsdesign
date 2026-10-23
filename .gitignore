@@ -4,8 +4,8 @@ node_modules
 
 # Environment files & Secrets (CRITICAL: never commit API keys or production secrets)
 .env
-.env.local
-.env.*.local
+.env.*
+.env.example
 
 # Production Build Output
 dist
