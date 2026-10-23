@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "twokidsdesign",
+    "site": "twokidsdesign-aed2d",
     "public": "dist",
     "ignore": [
       "firebase.json",

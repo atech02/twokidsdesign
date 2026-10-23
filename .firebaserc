@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "valleycrest-website"
+    "default": "twokidsdesign-aed2d",
+    "twokidsdesign": "twokidsdesign-aed2d",
+    "valleycrest": "valleycrest-website"
   }
 }
