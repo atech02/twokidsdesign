@@ -7,7 +7,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const ORDER_EMAIL_FROM =
   process.env.ORDER_EMAIL_FROM || 'Two Kids Design <orders@twokidsdesign.com>';
 const STORE_NAME = process.env.STORE_NAME || 'Two Kids Design';
-const STORE_URL = process.env.STORE_URL || 'https://twokidsdesign.web.app';
+const STORE_URL = process.env.STORE_URL || 'https://twokidsdesign-aed2d.web.app';
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@twokidsdesign.com';
 
 // Initialize official Resend SDK client if API key is provided

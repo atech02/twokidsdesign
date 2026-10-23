@@ -79,7 +79,7 @@ export class LipilaClient {
     this.baseUrl = (process.env.LIPILA_BASE_URL || defaultBaseUrl).replace(/\/$/, '');
     this.apiKey = process.env.lipila_secret_api || process.env.LIPILA_SECRET_API || process.env.LIPILA_API_KEY || '';
     this.callbackUrl =
-      process.env.LIPILA_CALLBACK_URL || 'https://twokidsdesign.web.app/api/webhooks/lipila';
+      process.env.LIPILA_CALLBACK_URL || 'https://twokidsdesign2.netlify.app/api/webhooks/lipila';
   }
 
   public getEnvironment(): LipilaEnvironment {

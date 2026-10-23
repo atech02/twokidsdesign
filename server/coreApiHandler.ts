@@ -34,8 +34,11 @@ export interface CoreApiResponse {
 }
 
 const ALLOWED_ORIGINS = [
+  'https://twokidsdesign-aed2d.web.app',
+  'https://twokidsdesign-aed2d.firebaseapp.com',
   'https://twokidsdesign.web.app',
   'https://twokidsdesign.firebaseapp.com',
+  'https://twokidsdesign2.netlify.app',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
@@ -119,7 +122,7 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         store: {
           name: process.env.STORE_NAME || 'Two Kids Design',
           currency: 'ZMW',
-          url: process.env.STORE_URL || 'https://twokidsdesign.web.app',
+          url: process.env.STORE_URL || 'https://twokidsdesign-aed2d.web.app',
         },
       }, requestOrigin);
     }
@@ -204,7 +207,7 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         return jsonResponse(200, { success: true, order, message: 'Order is already paid.' }, requestOrigin);
       }
 
-      const clientOrigin = requestOrigin || 'https://twokidsdesign.web.app';
+      const clientOrigin = requestOrigin || 'https://twokidsdesign-aed2d.web.app';
       const backUrl = `${clientOrigin}/order-confirmation/${encodeURIComponent(order.orderId)}`;
 
       const nameParts = (order.customerName || 'Valued Creator').trim().split(/\s+/);
