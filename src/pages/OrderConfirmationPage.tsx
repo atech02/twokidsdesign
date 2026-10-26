@@ -7,6 +7,7 @@ import {
   RefreshCw,
   ShieldCheck,
   AlertCircle,
+  XCircle,
   ArrowRight,
   Mail,
   Clock,
@@ -73,8 +74,23 @@ export const OrderConfirmationPage: React.FC = () => {
 
     reconcileOrder();
 
+    // Auto-poll status while order is pending payment
+    const interval = setInterval(() => {
+      if (!cancelled) {
+        checkOrderStatus(orderId).then(res => {
+          if (!cancelled && res.order) {
+            setOrder(res.order);
+            if (res.order.orderStatus !== 'pending_payment') {
+              clearInterval(interval);
+            }
+          }
+        });
+      }
+    }, 4000);
+
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [orderId, emailParam]);
 
@@ -178,6 +194,120 @@ export const OrderConfirmationPage: React.FC = () => {
             <span>Go to Customer Order Lookup</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Payment Failed State
+  if (order.orderStatus === 'payment_failed' || order.paymentStatus === 'failed') {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+        <div className="bg-white rounded-3xl p-6 sm:p-10 border border-red-200 shadow-editorial space-y-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0 border border-red-200">
+              <XCircle className="w-7 h-7 text-red-600" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-widest text-red-600">
+                PAYMENT AUTHORIZATION DECLINED
+              </span>
+              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-charcoal">
+                Your Card Payment Could Not Be Completed
+              </h1>
+              <p className="text-xs sm:text-sm text-charcoal/75">
+                Order ID: <strong className="font-mono text-charcoal">{order.orderId}</strong> · Reference: <strong className="font-mono text-charcoal">{order.referenceId}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-amber-50/70 border border-amber-200 p-5 space-y-2 text-xs sm:text-sm text-charcoal/80">
+            <h3 className="font-bold text-charcoal flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <span>Why did this happen?</span>
+            </h3>
+            <p>
+              The payment gateway reported: <strong className="text-red-700 font-mono">{order.payment?.errorMessage || 'UNAUTHORIZED_CARD'}</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-1">
+              <li><strong>E-Commerce / Online Transactions:</strong> Some bank cards have online or remote purchases disabled by default until enabled in your banking app.</li>
+              <li><strong>3D Secure Verification:</strong> An SMS OTP or banking app authorization may have expired or was not approved.</li>
+              <li><strong>Card Issuer Block:</strong> Your card issuer may have flagged the transaction for security or cross-border rules.</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Link
+              to="/checkout"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-6 py-3.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs"
+            >
+              <span>Try Again or Pay with Mobile Money</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <a
+              href="mailto:support@twokidsdesign.com"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors"
+            >
+              <Mail className="w-4 h-4 text-brandBlue" />
+              <span>Contact Support</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Awaiting Payment Confirmation State
+  if (order.orderStatus === 'pending_payment') {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+        <div className="bg-white rounded-3xl p-6 sm:p-10 border border-charcoal/15 shadow-editorial space-y-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center shrink-0 border border-amber-200">
+              <Clock className="w-7 h-7 text-amber-600 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-600">
+                AWAITING PAYMENT CONFIRMATION
+              </span>
+              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-charcoal">
+                Verifying Your Transaction...
+              </h1>
+              <p className="text-xs sm:text-sm text-charcoal/75">
+                Order Reference: <strong className="font-mono text-charcoal">{order.orderId}</strong> · Amount: <strong className="text-charcoal">{order.currency} {order.total.toFixed(2)}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-ivory border border-charcoal/10 p-5 space-y-2 text-xs sm:text-sm text-charcoal/80">
+            <p>
+              If you just submitted your card or mobile money details, we are actively checking confirmation with Lipila.
+              Your licensed download links will appear here automatically once payment is verified.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                checkOrderStatus(order.orderId).then(res => {
+                  if (res.order) setOrder(res.order);
+                  setLoading(false);
+                });
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-6 py-3.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs"
+            >
+              <RefreshCw className="w-4 h-4 text-brandBlue" />
+              <span>Check Status Now</span>
+            </button>
+            <Link
+              to="/downloads"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors"
+            >
+              <span>Go to Order Lookup</span>
+            </Link>
+          </div>
         </div>
       </div>
     );

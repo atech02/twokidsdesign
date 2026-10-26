@@ -158,6 +158,16 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
       }
     }
 
+    // 0d. GET /api/diagnostics/lipila-status?referenceId=... (Safe Gateway Reconciliation Status Check)
+    if (method === 'GET' && pathname === '/api/diagnostics/lipila-status') {
+      const referenceId = req.searchParams.get('referenceId') || '';
+      if (!referenceId) {
+        return jsonResponse(400, { error: 'Missing referenceId query parameter.' }, requestOrigin);
+      }
+      const check = await lipilaClient.checkTransactionStatus(referenceId);
+      return jsonResponse(check.ok ? 200 : check.status || 500, check, requestOrigin);
+    }
+
     // 1. GET /api/products
     if (method === 'GET' && pathname === '/api/products') {
       const published = PRODUCTS.filter(p => p.publicationStatus === 'published');
@@ -207,8 +217,16 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         return jsonResponse(200, { success: true, order, message: 'Order is already paid.' }, requestOrigin);
       }
 
-      const clientOrigin = requestOrigin || 'https://twokidsdesign-aed2d.web.app';
-      const backUrl = `${clientOrigin}/order-confirmation/${encodeURIComponent(order.orderId)}`;
+      // Sanitize client origin for customer return URLs:
+      // Replace accidental Netlify deploy-preview or backend URLs with the production frontend URL
+      let clientOrigin = process.env.STORE_URL || 'https://twokidsdesign-aed2d.web.app';
+      if (
+        requestOrigin &&
+        (requestOrigin.startsWith('http://localhost') || requestOrigin.startsWith('http://127.0.0.1'))
+      ) {
+        clientOrigin = requestOrigin;
+      }
+      const backUrl = `${clientOrigin.replace(/\/$/, '')}/order-confirmation/${encodeURIComponent(order.orderId)}`;
 
       const nameParts = (order.customerName || 'Valued Creator').trim().split(/\s+/);
       const firstName = nameParts[0] || 'Valued';
