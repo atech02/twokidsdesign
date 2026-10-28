@@ -1,5 +1,5 @@
 import type { DigitalProduct, LicenseTierId } from '../data/products';
-import type { OrderRecord, OrderLineItemInput, PaymentMethodType } from '../../server/orderStore';
+import type { OrderRecord, OrderLineItemInput, PaymentMethodType, OrderStatusType } from '../../server/orderStore';
 import { getProductById, calculateItemPrice, LICENSE_OPTIONS } from '../data/products';
 import { generateProtectedBundlePdf } from '../../server/pdfGenerator';
 
@@ -12,6 +12,15 @@ function getBackupOrders(): OrderRecord[] {
   } catch {
     return [];
   }
+}
+
+function getBackupOrder(orderId: string): OrderRecord | undefined {
+  return getBackupOrders().find(
+    o =>
+      o.orderId === orderId ||
+      o.referenceId === orderId ||
+      o.payment?.externalTransactionId === orderId
+  );
 }
 
 function saveBackupOrder(order: OrderRecord) {
@@ -222,6 +231,7 @@ export async function initiateLipilaMobileMoneyPayment(
   error?: string;
   message?: string;
   referenceId?: string;
+  providerReference?: string;
 }> {
   const cleanPhone = accountNumber.replace(/[\s+-]/g, '');
   if (!cleanPhone || cleanPhone.length < 9) {
@@ -236,6 +246,7 @@ export async function initiateLipilaMobileMoneyPayment(
     error?: string;
     message?: string;
     referenceId?: string;
+    providerReference?: string;
     orderId?: string;
   }>('/api/payments/lipila/mobile-money', {
     method: 'POST',
@@ -249,6 +260,7 @@ export async function initiateLipilaMobileMoneyPayment(
       error: res.data.error,
       message: res.data.message,
       referenceId: res.data.referenceId,
+      providerReference: res.data.providerReference,
     };
   }
 
@@ -267,23 +279,79 @@ export async function initiateLipilaMobileMoneyPayment(
 }
 
 /**
+ * Rehydrate order into serverless backend memory store
+ */
+export async function rehydrateOrderApi(order: OrderRecord): Promise<boolean> {
+  const res = await safeFetchJson<{ success: boolean; order?: OrderRecord }>('/api/orders/rehydrate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order }),
+  });
+  return Boolean(res.ok && res.data?.success);
+}
+
+/**
  * 4. Polling & Status Verification: GET /api/orders/:orderId/status
  */
 export async function checkOrderStatus(orderId: string): Promise<{
   order?: OrderRecord;
+  paymentStatus?: 'pending' | 'successful' | 'failed';
+  orderStatus?: OrderStatusType;
+  failureReason?: string;
+  message?: string;
   error?: string;
 }> {
-  const res = await safeFetchJson<{
+  let res = await safeFetchJson<{
     order?: OrderRecord;
+    paymentStatus?: 'pending' | 'successful' | 'failed';
+    orderStatus?: OrderStatusType;
+    failureReason?: string;
+    message?: string;
     error?: string;
   }>(`/api/orders/${encodeURIComponent(orderId)}/status`);
 
-  if (res.ok && res.data?.order) {
-    saveBackupOrder(res.data.order);
-    return { order: res.data.order };
+  // Handle serverless container cold-starts where order might need rehydration from local cache
+  if (!res.ok && res.status === 404) {
+    const backup = getBackupOrder(orderId);
+    if (backup) {
+      const rehydrated = await rehydrateOrderApi(backup);
+      if (rehydrated) {
+        res = await safeFetchJson<{
+          order?: OrderRecord;
+          paymentStatus?: 'pending' | 'successful' | 'failed';
+          orderStatus?: OrderStatusType;
+          failureReason?: string;
+          message?: string;
+          error?: string;
+        }>(`/api/orders/${encodeURIComponent(orderId)}/status`);
+      }
+    }
+  }
+
+  if (res.ok && res.data) {
+    if (res.data.order) {
+      saveBackupOrder(res.data.order);
+    }
+    return {
+      order: res.data.order,
+      paymentStatus:
+        res.data.paymentStatus ||
+        (res.data.order?.paymentStatus as 'pending' | 'successful' | 'failed' | undefined),
+      orderStatus: res.data.orderStatus || res.data.order?.orderStatus,
+      failureReason: res.data.failureReason || res.data.order?.payment?.errorMessage,
+      message: res.data.message || res.data.order?.payment?.errorMessage,
+    };
   }
 
   if (res.isHtmlFallback) {
+    const backup = getBackupOrder(orderId);
+    if (backup) {
+      return {
+        order: backup,
+        paymentStatus: backup.paymentStatus as 'pending' | 'successful' | 'failed',
+        orderStatus: backup.orderStatus,
+      };
+    }
     return {
       error:
         'The backend status endpoint returned HTML instead of JSON. Ensure the backend server is reachable.',

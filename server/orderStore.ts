@@ -98,6 +98,12 @@ function loadOrdersFromPath(filePath: string) {
         if (order.referenceId) {
           ordersByReferenceId.set(order.referenceId, order.orderId);
         }
+        if (order.payment?.externalTransactionId) {
+          ordersByReferenceId.set(order.payment.externalTransactionId, order.orderId);
+        }
+        if (order.payment?.referenceId) {
+          ordersByReferenceId.set(order.payment.referenceId, order.orderId);
+        }
         if (order.idempotencyKey) {
           ordersByIdempotencyKey.set(order.idempotencyKey, order.orderId);
         }
@@ -341,12 +347,29 @@ export function createPendingOrder(params: CreateOrderParams): {
  * Only called after server-side payment verification (callback or check-status).
  */
 export function markOrderAsPaid(
-  referenceId: string,
+  referenceOrOrderId: string,
   externalTransactionId?: string
 ): OrderRecord | undefined {
-  const orderId = ordersByReferenceId.get(referenceId);
-  if (!orderId) return undefined;
-  const order = ordersById.get(orderId);
+  loadPersistedOrders();
+  const clean = referenceOrOrderId.trim();
+  let order = ordersById.get(clean);
+  if (!order) {
+    const orderId = ordersByReferenceId.get(clean);
+    if (orderId) order = ordersById.get(orderId);
+  }
+  if (!order) {
+    for (const o of ordersById.values()) {
+      if (
+        o.orderId === clean ||
+        o.referenceId === clean ||
+        o.payment?.externalTransactionId === clean ||
+        o.payment?.referenceId === clean
+      ) {
+        order = o;
+        break;
+      }
+    }
+  }
   if (!order) return undefined;
 
   // Idempotency: if already paid, do not re-issue or mutate
@@ -369,11 +392,12 @@ export function markOrderAsPaid(
   order.payment.status = 'successful';
   if (externalTransactionId) {
     order.payment.externalTransactionId = externalTransactionId;
+    ordersByReferenceId.set(externalTransactionId.trim(), order.orderId);
   }
   order.updatedAt = new Date().toISOString();
   order.completedAt = new Date().toISOString();
 
-  ordersById.set(orderId, order);
+  ordersById.set(order.orderId, order);
   persistOrders();
   return order;
 }
@@ -381,14 +405,31 @@ export function markOrderAsPaid(
 /**
  * Mark an order payment as failed. Never grants download tokens.
  */
-export function markOrderAsFailed(referenceId: string, reason?: string): OrderRecord | undefined {
-  const orderId = ordersByReferenceId.get(referenceId);
-  if (!orderId) return undefined;
-  const order = ordersById.get(orderId);
+export function markOrderAsFailed(referenceOrOrderId: string, reason?: string): OrderRecord | undefined {
+  loadPersistedOrders();
+  const clean = referenceOrOrderId.trim();
+  let order = ordersById.get(clean);
+  if (!order) {
+    const orderId = ordersByReferenceId.get(clean);
+    if (orderId) order = ordersById.get(orderId);
+  }
+  if (!order) {
+    for (const o of ordersById.values()) {
+      if (
+        o.orderId === clean ||
+        o.referenceId === clean ||
+        o.payment?.externalTransactionId === clean ||
+        o.payment?.referenceId === clean
+      ) {
+        order = o;
+        break;
+      }
+    }
+  }
   if (!order) return undefined;
 
   // Stale event protection: do not downgrade an already paid order
-  if (order.paymentStatus === 'successful') {
+  if (order.paymentStatus === 'successful' || order.orderStatus === 'paid') {
     return order;
   }
 
@@ -398,7 +439,7 @@ export function markOrderAsFailed(referenceId: string, reason?: string): OrderRe
   order.payment.errorMessage = reason || 'Payment authorization failed or was declined';
   order.updatedAt = new Date().toISOString();
 
-  ordersById.set(orderId, order);
+  ordersById.set(order.orderId, order);
   persistOrders();
   return order;
 }
@@ -410,6 +451,7 @@ export function setOrderCardRedirectionUrl(
   orderId: string,
   cardRedirectionUrl: string
 ): OrderRecord | undefined {
+  loadPersistedOrders();
   const order = ordersById.get(orderId);
   if (!order) return undefined;
   order.payment.cardRedirectionUrl = cardRedirectionUrl;
@@ -420,17 +462,106 @@ export function setOrderCardRedirectionUrl(
   return order;
 }
 
+/**
+ * Link an external gateway transaction reference (e.g. LPLXC-...) to an order
+ */
+export function setOrderProviderReference(
+  orderId: string,
+  providerReference: string
+): OrderRecord | undefined {
+  loadPersistedOrders();
+  const order = ordersById.get(orderId.trim());
+  if (!order) return undefined;
+  const cleanRef = providerReference.trim();
+  if (cleanRef) {
+    order.payment.externalTransactionId = cleanRef;
+    ordersByReferenceId.set(cleanRef, order.orderId);
+    order.updatedAt = new Date().toISOString();
+    ordersById.set(order.orderId, order);
+    persistOrders();
+  }
+  return order;
+}
+
+/**
+ * Rehydrate a pending order into memory & disk cache for serverless container resilience
+ */
+export function rehydrateOrder(incoming: OrderRecord): OrderRecord {
+  loadPersistedOrders();
+  const existing = ordersById.get(incoming.orderId);
+  if (existing) {
+    return existing;
+  }
+  ordersById.set(incoming.orderId, incoming);
+  if (incoming.referenceId) {
+    ordersByReferenceId.set(incoming.referenceId, incoming.orderId);
+  }
+  if (incoming.payment?.externalTransactionId) {
+    ordersByReferenceId.set(incoming.payment.externalTransactionId, incoming.orderId);
+  }
+  if (incoming.payment?.referenceId) {
+    ordersByReferenceId.set(incoming.payment.referenceId, incoming.orderId);
+  }
+  if (incoming.idempotencyKey) {
+    ordersByIdempotencyKey.set(incoming.idempotencyKey, incoming.orderId);
+  }
+  persistOrders();
+  return incoming;
+}
+
 export function getOrderByOrderId(orderId: string): OrderRecord | undefined {
-  return ordersById.get(orderId.trim());
+  loadPersistedOrders();
+  const clean = orderId.trim();
+  const direct = ordersById.get(clean);
+  if (direct) return direct;
+
+  const byRef = ordersByReferenceId.get(clean);
+  if (byRef) return ordersById.get(byRef);
+
+  for (const o of ordersById.values()) {
+    if (
+      o.orderId === clean ||
+      o.referenceId === clean ||
+      o.payment?.externalTransactionId === clean
+    ) {
+      return o;
+    }
+  }
+  return undefined;
 }
 
 export function getOrderByReferenceId(referenceId: string): OrderRecord | undefined {
-  const orderId = ordersByReferenceId.get(referenceId.trim());
-  return orderId ? ordersById.get(orderId) : undefined;
+  loadPersistedOrders();
+  const clean = referenceId.trim();
+  if (!clean) return undefined;
+
+  const orderId = ordersByReferenceId.get(clean);
+  if (orderId) {
+    const order = ordersById.get(orderId);
+    if (order) return order;
+  }
+
+  const byOrderId = ordersById.get(clean);
+  if (byOrderId) return byOrderId;
+
+  for (const o of ordersById.values()) {
+    if (
+      o.referenceId === clean ||
+      o.orderId === clean ||
+      o.payment?.externalTransactionId === clean ||
+      o.payment?.referenceId === clean
+    ) {
+      ordersByReferenceId.set(clean, o.orderId);
+      return o;
+    }
+  }
+
+  return undefined;
 }
 
 export function getOrderByIdAndEmail(orderId: string, email?: string): OrderRecord | undefined {
-  const order = ordersById.get(orderId.trim());
+  loadPersistedOrders();
+  const order = getOrderByOrderId(orderId);
   if (!order || order.paymentStatus !== 'successful') return undefined;
   if (email && order.customerEmail.toLowerCase() !== email.trim().toLowerCase()) {
     return undefined;
@@ -439,6 +570,7 @@ export function getOrderByIdAndEmail(orderId: string, email?: string): OrderReco
 }
 
 export function getPaidOrdersByEmail(email: string): OrderRecord[] {
+  loadPersistedOrders();
   const normalized = email.trim().toLowerCase();
   if (!normalized) return [];
   const results: OrderRecord[] = [];

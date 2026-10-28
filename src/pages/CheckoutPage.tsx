@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -12,6 +12,8 @@ import {
   CreditCard,
   Smartphone,
   Info,
+  Clock,
+  RefreshCw,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatPrice } from '../data/products';
@@ -36,8 +38,13 @@ export const CheckoutPage: React.FC = () => {
   // Submission & status state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [pendingReferenceId, setPendingReferenceId] = useState<string | null>(null);
   const [pendingPromptNotice, setPendingPromptNotice] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pollTimeoutReached, setPollTimeoutReached] = useState(false);
+  const [isManualChecking, setIsManualChecking] = useState(false);
+  const pollCountRef = useRef(0);
+  const pollInFlightRef = useRef(false);
 
   // Generate an idempotency key per cart state & email
   const idempotencyKey = useMemo(() => {
@@ -47,47 +54,155 @@ export const CheckoutPage: React.FC = () => {
     ).slice(0, 24)}-${Date.now()}`;
   }, [customerEmail, items, paymentMethod]);
 
-  // Polling for mobile-money / pending card payment completion
+  // Active polling for mobile-money / pending card payment completion
   useEffect(() => {
-    if (!pendingOrderId) return;
+    if (!pendingOrderId || pollTimeoutReached) return;
 
     let isMounted = true;
+    pollCountRef.current = 0;
+
     const interval = setInterval(async () => {
+      // Guard against overlapping poll requests
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+      pollCountRef.current += 1;
+
+      // Timeout after 45 attempts (~2.5 minutes)
+      if (pollCountRef.current > 45) {
+        if (isMounted) {
+          setPollTimeoutReached(true);
+        }
+        clearInterval(interval);
+        pollInFlightRef.current = false;
+        return;
+      }
+
       try {
         const res = await checkOrderStatus(pendingOrderId);
         if (!isMounted) return;
 
-        if (res.order) {
-          if (res.order.paymentStatus === 'successful' && res.order.orderStatus === 'paid') {
-            clearInterval(interval);
-            clearCart();
-            navigate(
-              `/order-confirmation/${encodeURIComponent(res.order.orderId)}?email=${encodeURIComponent(
-                res.order.customerEmail
-              )}`,
-              { state: { order: res.order } }
-            );
-          } else if (res.order.paymentStatus === 'failed') {
-            clearInterval(interval);
-            setIsSubmitting(false);
-            setPendingOrderId(null);
-            setPendingPromptNotice(null);
+        const pStatus = res.paymentStatus || res.order?.paymentStatus;
+        const oStatus = res.orderStatus || res.order?.orderStatus;
+
+        if (pStatus === 'successful' || oStatus === 'paid') {
+          clearInterval(interval);
+          clearCart();
+          const targetOrder = res.order;
+          navigate(
+            `/order-confirmation/${encodeURIComponent(pendingOrderId)}?email=${encodeURIComponent(
+              targetOrder?.customerEmail || customerEmail
+            )}`,
+            { state: { order: targetOrder } }
+          );
+        } else if (pStatus === 'failed' || oStatus === 'payment_failed') {
+          clearInterval(interval);
+          setIsSubmitting(false);
+          setPendingOrderId(null);
+          setPendingPromptNotice(null);
+          setPollTimeoutReached(false);
+
+          const reasonCode = res.failureReason || '';
+          const msg = res.message || res.order?.payment?.errorMessage || '';
+
+          if (
+            reasonCode === 'INSUFFICIENT_FUNDS' ||
+            msg.toLowerCase().includes('insufficient') ||
+            msg.toLowerCase().includes('balance') ||
+            msg.toLowerCase().includes('funds')
+          ) {
             setErrorMessage(
-              res.order.payment.errorMessage ||
-                'Payment was declined or cancelled. No charges were made and no files were released.'
+              'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.'
+            );
+          } else if (
+            reasonCode === 'PAYMENT_CANCELLED' ||
+            msg.toLowerCase().includes('cancel') ||
+            msg.toLowerCase().includes('reject') ||
+            msg.toLowerCase().includes('decline')
+          ) {
+            setErrorMessage('Payment was declined or cancelled on your mobile device.');
+          } else if (
+            reasonCode === 'PAYMENT_EXPIRED' ||
+            msg.toLowerCase().includes('expire') ||
+            msg.toLowerCase().includes('time')
+          ) {
+            setErrorMessage('Payment authorization prompt timed out. Please try again.');
+          } else {
+            setErrorMessage(
+              msg || 'Payment was declined or cancelled. No charges were made and no files were released.'
             );
           }
         }
       } catch {
         // Continue polling
+      } finally {
+        pollInFlightRef.current = false;
       }
-    }, 3000);
+    }, 3500);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      pollInFlightRef.current = false;
     };
-  }, [pendingOrderId, clearCart, navigate]);
+  }, [pendingOrderId, pollTimeoutReached, clearCart, navigate, customerEmail]);
+
+  const handleManualCheckStatus = async () => {
+    if (!pendingOrderId) return;
+    setIsManualChecking(true);
+    try {
+      const res = await checkOrderStatus(pendingOrderId);
+      const pStatus = res.paymentStatus || res.order?.paymentStatus;
+      const oStatus = res.orderStatus || res.order?.orderStatus;
+
+      if (pStatus === 'successful' || oStatus === 'paid') {
+        clearCart();
+        const targetOrder = res.order;
+        navigate(
+          `/order-confirmation/${encodeURIComponent(pendingOrderId)}?email=${encodeURIComponent(
+            targetOrder?.customerEmail || customerEmail
+          )}`,
+          { state: { order: targetOrder } }
+        );
+        return;
+      }
+
+      if (pStatus === 'failed' || oStatus === 'payment_failed') {
+        setPendingOrderId(null);
+        setPendingPromptNotice(null);
+        setPollTimeoutReached(false);
+
+        const reasonCode = res.failureReason || '';
+        const msg = res.message || res.order?.payment?.errorMessage || '';
+
+        if (
+          reasonCode === 'INSUFFICIENT_FUNDS' ||
+          msg.toLowerCase().includes('insufficient') ||
+          msg.toLowerCase().includes('balance') ||
+          msg.toLowerCase().includes('funds')
+        ) {
+          setErrorMessage(
+            'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.'
+          );
+        } else {
+          setErrorMessage(msg || 'Payment authorization failed or was declined.');
+        }
+        return;
+      }
+
+      setPendingPromptNotice('Status check complete: payment is still awaiting approval on your phone.');
+    } catch {
+      setErrorMessage('Unable to reach payment verification server. Please try again.');
+    } finally {
+      setIsManualChecking(false);
+    }
+  };
+
+  const handleCancelPendingPayment = () => {
+    setPendingOrderId(null);
+    setPendingPromptNotice(null);
+    setPollTimeoutReached(false);
+    setIsSubmitting(false);
+  };
 
   const sanitizeErrorMessage = (msg?: string): string => {
     if (!msg) return 'Unable to complete transaction. Please try again.';
@@ -190,19 +305,25 @@ export const CheckoutPage: React.FC = () => {
       // Step 2B: Mobile Money Payment via Lipila
       if (paymentMethod === 'mobile_money') {
         const momoRes = await initiateLipilaMobileMoneyPayment(order.orderId, mobileNumber);
+        setIsSubmitting(false); // Dispatched prompt! Clear connecting spinner!
+
         if (!momoRes.success) {
           setErrorMessage(
             sanitizeErrorMessage(momoRes.error || 'Failed to send mobile money prompt. Please check your number.')
           );
-          setIsSubmitting(false);
           return;
         }
 
         setPendingOrderId(order.orderId);
+        if (momoRes.providerReference || momoRes.referenceId) {
+          setPendingReferenceId(momoRes.providerReference || momoRes.referenceId || null);
+        }
         setPendingPromptNotice(
           momoRes.message ||
             'Payment request sent to your mobile phone. Please check your phone now and enter your PIN to approve the transaction.'
         );
+        pollCountRef.current = 0;
+        setPollTimeoutReached(false);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
@@ -442,18 +563,62 @@ export const CheckoutPage: React.FC = () => {
             {pendingPromptNotice && (
               <div
                 role="status"
-                className="rounded-xl bg-brandBlue-light border border-brandBlue/30 p-4 flex items-start gap-3 text-xs sm:text-sm text-charcoal animate-pulse"
+                className="rounded-xl p-4 sm:p-5 bg-amber-50 border border-amber-200 text-charcoal text-xs sm:text-sm flex flex-col gap-3 shadow-xs"
               >
-                <Loader2 className="w-5 h-5 text-brandBlue-dark animate-spin shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-heading font-bold text-charcoal">
-                    Awaiting Payment Authorization...
-                  </p>
-                  <p className="mt-1 leading-relaxed">{pendingPromptNotice}</p>
-                  <p className="text-[11px] text-charcoal/70 mt-2">
-                    Keep this window open. As soon as you approve the prompt or card checkout, you will automatically be directed to your download page.
-                  </p>
+                <div className="flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+                  <div className="space-y-1">
+                    <p className="font-heading font-bold text-amber-900 text-sm">
+                      Awaiting Payment Authorization...
+                    </p>
+                    <p className="text-amber-800 leading-relaxed">{pendingPromptNotice}</p>
+                    {pendingReferenceId && (
+                      <p className="text-[11px] text-amber-700 font-mono pt-0.5">
+                        Gateway Ref: {pendingReferenceId}
+                      </p>
+                    )}
+                  </div>
                 </div>
+
+                {pollTimeoutReached ? (
+                  <div className="border-t border-amber-200/80 pt-3 space-y-2">
+                    <p className="text-xs font-semibold text-amber-900">
+                      Payment authorization is taking longer than usual. If you already entered your PIN and approved the prompt on your phone, click below:
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleManualCheckStatus}
+                        disabled={isManualChecking}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-charcoal text-white font-semibold text-xs hover:bg-brandBlue-dark transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isManualChecking ? 'animate-spin' : ''}`} />
+                        <span>{isManualChecking ? 'Checking...' : 'Check Status Now'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelPendingPayment}
+                        className="px-3.5 py-2 rounded-lg bg-white border border-charcoal/20 text-charcoal font-medium text-xs hover:bg-softGrey transition-colors"
+                      >
+                        Cancel & Try Again
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between border-t border-amber-200/60 pt-2.5 text-[11px] text-amber-800">
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                      Checking payment status automatically...
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCancelPendingPayment}
+                      className="underline font-medium hover:text-amber-950 transition-colors"
+                    >
+                      Cancel & Retry
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -461,26 +626,44 @@ export const CheckoutPage: React.FC = () => {
             {errorMessage && (
               <div
                 role="alert"
-                className="rounded-xl bg-red-50 border border-red-300 p-4 flex items-start gap-3 text-xs sm:text-sm text-red-900"
+                className="rounded-xl bg-red-50 border border-red-200 p-4 sm:p-5 flex flex-col gap-2.5 text-xs sm:text-sm text-red-900 shadow-xs"
               >
-                <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Payment Issue</p>
-                  <p className="mt-0.5 leading-relaxed">{errorMessage}</p>
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-heading font-bold text-red-900 text-sm">Payment Unsuccessful</p>
+                    <p className="leading-relaxed text-red-800">{errorMessage}</p>
+                  </div>
                 </div>
+
+                {errorMessage.toLowerCase().includes('insufficient') && (
+                  <div className="bg-white/80 rounded-lg p-3 border border-red-200 text-xs text-charcoal/80 mt-1 space-y-1">
+                    <p className="font-semibold text-red-950">Next steps to complete your purchase:</p>
+                    <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-0.5">
+                      <li>Top up your Airtel Money account via your bank or mobile agent.</li>
+                      <li>Ensure your wallet balance covers the full order total of <strong>{formatPrice(total)}</strong>.</li>
+                      <li>Click &ldquo;Pay with Lipila&rdquo; below once your account has been credited.</li>
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Pay Now Button */}
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(pendingOrderId && !pollTimeoutReached)}
               className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-6 py-4 text-sm sm:text-base font-semibold text-white hover:bg-brandBlue-dark disabled:opacity-60 transition-colors shadow-editorial active:scale-[0.99]"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-brandBlue" />
                   <span>Connecting to Lipila Gateway...</span>
+                </>
+              ) : pendingOrderId ? (
+                <>
+                  <Smartphone className="w-5 h-5 text-amber-400 animate-pulse" />
+                  <span>Awaiting Mobile Approval...</span>
                 </>
               ) : (
                 <>

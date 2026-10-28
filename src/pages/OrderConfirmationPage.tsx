@@ -201,6 +201,11 @@ export const OrderConfirmationPage: React.FC = () => {
 
   // Payment Failed State
   if (order.orderStatus === 'payment_failed' || order.paymentStatus === 'failed') {
+    const isMobileMoney = order.payment?.method === 'mobile_money';
+    const isInsufficientFunds =
+      (order.payment?.errorMessage || '').toLowerCase().includes('insufficient') ||
+      (order.payment?.errorMessage || '').toLowerCase().includes('balance');
+
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
         <div className="bg-white rounded-3xl p-6 sm:p-10 border border-red-200 shadow-editorial space-y-6">
@@ -213,7 +218,9 @@ export const OrderConfirmationPage: React.FC = () => {
                 PAYMENT AUTHORIZATION DECLINED
               </span>
               <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-charcoal">
-                Your Card Payment Could Not Be Completed
+                {isMobileMoney
+                  ? 'Your Mobile Money Payment Could Not Be Completed'
+                  : 'Your Card Payment Could Not Be Completed'}
               </h1>
               <p className="text-xs sm:text-sm text-charcoal/75">
                 Order ID: <strong className="font-mono text-charcoal">{order.orderId}</strong> · Reference: <strong className="font-mono text-charcoal">{order.referenceId}</strong>
@@ -227,13 +234,29 @@ export const OrderConfirmationPage: React.FC = () => {
               <span>Why did this happen?</span>
             </h3>
             <p>
-              The payment gateway reported: <strong className="text-red-700 font-mono">{order.payment?.errorMessage || 'UNAUTHORIZED_CARD'}</strong>
+              The payment gateway reported: <strong className="text-red-700 font-mono">{order.payment?.errorMessage || (isMobileMoney ? 'TRANSACTION_DECLINED' : 'UNAUTHORIZED_CARD')}</strong>
             </p>
-            <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-1">
-              <li><strong>E-Commerce / Online Transactions:</strong> Some bank cards have online or remote purchases disabled by default until enabled in your banking app.</li>
-              <li><strong>3D Secure Verification:</strong> An SMS OTP or banking app authorization may have expired or was not approved.</li>
-              <li><strong>Card Issuer Block:</strong> Your card issuer may have flagged the transaction for security or cross-border rules.</li>
-            </ul>
+            {isMobileMoney ? (
+              <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-1">
+                {isInsufficientFunds ? (
+                  <>
+                    <li><strong>Insufficient Balance:</strong> Your Airtel Money account had insufficient balance to cover the bundle total of <strong>{order.currency} {order.total.toFixed(2)}</strong>.</li>
+                    <li><strong>Wallet Top-up:</strong> Please top up your wallet via your bank, agent, or USSD and try again.</li>
+                  </>
+                ) : (
+                  <>
+                    <li><strong>Prompt Expired or Cancelled:</strong> The authorization prompt on your phone was cancelled, declined, or timed out before PIN entry.</li>
+                    <li><strong>SIM/Network Delay:</strong> Ensure your phone has stable network coverage to receive USSD authorization push notifications.</li>
+                  </>
+                )}
+              </ul>
+            ) : (
+              <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-1">
+                <li><strong>E-Commerce / Online Transactions:</strong> Some bank cards have online or remote purchases disabled by default until enabled in your banking app.</li>
+                <li><strong>3D Secure Verification:</strong> An SMS OTP or banking app authorization may have expired or was not approved.</li>
+                <li><strong>Card Issuer Block:</strong> Your card issuer may have flagged the transaction for security or cross-border rules.</li>
+              </ul>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -241,7 +264,7 @@ export const OrderConfirmationPage: React.FC = () => {
               to="/checkout"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-6 py-3.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs"
             >
-              <span>Try Again or Pay with Mobile Money</span>
+              <span>{isMobileMoney ? 'Try Again with Mobile Money or Card' : 'Try Again or Pay with Mobile Money'}</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <a

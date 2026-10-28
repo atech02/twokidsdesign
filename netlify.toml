@@ -17,6 +17,12 @@
   to = "/.netlify/functions/api/:splat"
   status = 200
 
+# Client-side SPA routing fallback for React Router (/checkout, /order-confirmation, etc.)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 # Global CORS headers across all API endpoints
 [[headers]]
   for = "/api/*"
