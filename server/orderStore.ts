@@ -63,10 +63,15 @@ export interface OrderRecord {
   currency: 'ZMW';
   orderStatus: OrderStatusType;
   paymentStatus: PaymentStatusType;
+  paymentMethod?: PaymentMethodType;
   payment: PaymentDetails;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  customerCountry?: string;
+  customerCity?: string;
+  customerAddress?: string;
+  customerZip?: string;
   confirmationEmailStatus?: 'pending' | 'sending' | 'sent' | 'failed';
   confirmationEmailMessageId?: string;
   confirmationEmailSentAt?: string;
@@ -228,6 +233,10 @@ export interface CreateOrderParams {
   items: OrderLineItemInput[];
   paymentMethod: PaymentMethodType;
   customerPhone?: string;
+  customerCountry?: string;
+  customerCity?: string;
+  customerAddress?: string;
+  customerZip?: string;
 }
 
 /**
@@ -321,6 +330,7 @@ export function createPendingOrder(params: CreateOrderParams): {
     currency: 'ZMW',
     orderStatus: 'pending_payment',
     paymentStatus: 'pending',
+    paymentMethod: params.paymentMethod,
     payment: {
       method: params.paymentMethod,
       provider: 'lipila',
@@ -332,6 +342,10 @@ export function createPendingOrder(params: CreateOrderParams): {
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    customerCountry: params.customerCountry?.trim(),
+    customerCity: params.customerCity?.trim(),
+    customerAddress: params.customerAddress?.trim(),
+    customerZip: params.customerZip?.trim(),
   };
 
   ordersById.set(orderId, order);

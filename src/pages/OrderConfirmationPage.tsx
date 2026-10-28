@@ -234,13 +234,13 @@ export const OrderConfirmationPage: React.FC = () => {
               <span>Why did this happen?</span>
             </h3>
             <p>
-              The payment gateway reported: <strong className="text-red-700 font-mono">{order.payment?.errorMessage || (isMobileMoney ? 'TRANSACTION_DECLINED' : 'UNAUTHORIZED_CARD')}</strong>
+              The payment gateway reported: <strong className="text-red-700 font-mono">{order.payment?.errorMessage || (isMobileMoney ? 'TRANSACTION_DECLINED' : 'CARD_DECLINED')}</strong>
             </p>
             {isMobileMoney ? (
               <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-1">
                 {isInsufficientFunds ? (
                   <>
-                    <li><strong>Insufficient Balance:</strong> Your Airtel Money account had insufficient balance to cover the bundle total of <strong>{order.currency} {order.total.toFixed(2)}</strong>.</li>
+                    <li><strong>Insufficient Balance:</strong> Your mobile money account had insufficient balance to cover the bundle total of <strong>{order.currency} {order.total.toFixed(2)}</strong>.</li>
                     <li><strong>Wallet Top-up:</strong> Please top up your wallet via your bank, agent, or USSD and try again.</li>
                   </>
                 ) : (
@@ -252,9 +252,9 @@ export const OrderConfirmationPage: React.FC = () => {
               </ul>
             ) : (
               <ul className="list-disc list-inside space-y-1 text-charcoal/70 pl-1">
-                <li><strong>E-Commerce / Online Transactions:</strong> Some bank cards have online or remote purchases disabled by default until enabled in your banking app.</li>
+                <li><strong>E-Commerce / Online Transactions:</strong> Many bank cards have online or remote purchases disabled by default until enabled in your banking app.</li>
                 <li><strong>3D Secure Verification:</strong> An SMS OTP or banking app authorization may have expired or was not approved.</li>
-                <li><strong>Card Issuer Block:</strong> Your card issuer may have flagged the transaction for security or cross-border rules.</li>
+                <li><strong>Card Issuer / Acquirer Authorization:</strong> Cross-border or international transactions require authorization by your bank and acquiring network permissions on the merchant account.</li>
               </ul>
             )}
           </div>

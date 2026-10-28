@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "server": "tsx server/index.ts",
-    "test": "tsx tests/store.test.ts && tsx tests/netlify-api.test.ts && tsx tests/momo-reconciliation.test.ts"
+    "test": "tsx tests/store.test.ts && tsx tests/netlify-api.test.ts && tsx tests/momo-reconciliation.test.ts && tsx tests/card-payments.test.ts"
   },
   "dependencies": {
     "express": "^5.1.0",

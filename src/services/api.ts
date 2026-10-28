@@ -138,6 +138,10 @@ export async function createCheckoutOrder(params: {
   items: OrderLineItemInput[];
   paymentMethod: PaymentMethodType;
   customerPhone?: string;
+  customerCountry?: string;
+  customerCity?: string;
+  customerAddress?: string;
+  customerZip?: string;
 }): Promise<{ success: boolean; error?: string; order?: OrderRecord }> {
   const email = (params.customerEmail || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

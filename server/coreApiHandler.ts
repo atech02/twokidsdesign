@@ -19,7 +19,7 @@ import {
   type OrderStatusType,
 } from './orderStore';
 import { generateProtectedBundlePdf } from './pdfGenerator';
-import { lipilaClient, type LipilaStatusResponse } from './lipilaClient';
+import { lipilaClient, type LipilaStatusResponse, type LipilaCardCollectionPayload } from './lipilaClient';
 import { sendOrderConfirmationEmail } from './emailService';
 
 export interface CoreApiRequest {
@@ -88,6 +88,113 @@ export interface ReconciliationResult {
 }
 
 /**
+ * Classify payment failure reason and user-facing message based on payment method and provider message.
+ * Distinguishes card issues (UNAUTHORIZED_CARD, CARD_DECLINED, 3D Secure) from mobile money issues.
+ */
+export function classifyPaymentFailure(
+  paymentMethod: string,
+  statusLower: string,
+  msgLower: string,
+  rawMsg: string
+): { failureCode: string; userMessage: string } {
+  const isCard = paymentMethod === 'card';
+
+  if (isCard) {
+    if (statusLower.includes('unauthorized') || msgLower.includes('unauthorized')) {
+      return {
+        failureCode: 'UNAUTHORIZED_CARD',
+        userMessage: rawMsg || 'Card authorization was declined by the card issuer or payment network (Unauthorized Card).',
+      };
+    }
+    if (
+      statusLower.includes('insufficient') ||
+      msgLower.includes('insufficient') ||
+      msgLower.includes('balance') ||
+      msgLower.includes('funds')
+    ) {
+      return {
+        failureCode: 'INSUFFICIENT_FUNDS',
+        userMessage: rawMsg || 'Card transaction failed due to insufficient funds or credit limit.',
+      };
+    }
+    if (statusLower.includes('cancel') || msgLower.includes('cancel')) {
+      return {
+        failureCode: 'PAYMENT_CANCELLED',
+        userMessage: rawMsg || 'Card payment session was cancelled.',
+      };
+    }
+    if (
+      statusLower.includes('expire') ||
+      msgLower.includes('expire') ||
+      statusLower.includes('time') ||
+      msgLower.includes('time')
+    ) {
+      return {
+        failureCode: 'PAYMENT_EXPIRED',
+        userMessage: rawMsg || 'Card payment session expired. Please try again.',
+      };
+    }
+    if (
+      statusLower.includes('decline') ||
+      msgLower.includes('decline') ||
+      statusLower.includes('reject') ||
+      msgLower.includes('reject')
+    ) {
+      return {
+        failureCode: 'CARD_DECLINED',
+        userMessage: rawMsg || 'Card transaction was declined by your bank or card issuer.',
+      };
+    }
+    return {
+      failureCode: 'PAYMENT_FAILED',
+      userMessage: rawMsg || 'Card payment authorization failed.',
+    };
+  }
+
+  // Mobile Money (Airtel, MTN, Zamtel)
+  if (
+    statusLower.includes('insufficient') ||
+    msgLower.includes('insufficient') ||
+    msgLower.includes('balance') ||
+    msgLower.includes('funds')
+  ) {
+    return {
+      failureCode: 'INSUFFICIENT_FUNDS',
+      userMessage:
+        'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.',
+    };
+  }
+  if (
+    statusLower.includes('cancel') ||
+    msgLower.includes('cancel') ||
+    statusLower.includes('reject') ||
+    msgLower.includes('reject') ||
+    statusLower.includes('decline') ||
+    msgLower.includes('decline')
+  ) {
+    return {
+      failureCode: 'PAYMENT_CANCELLED',
+      userMessage: 'Payment was declined or cancelled on your mobile device.',
+    };
+  }
+  if (
+    statusLower.includes('expire') ||
+    msgLower.includes('expire') ||
+    statusLower.includes('time') ||
+    msgLower.includes('time')
+  ) {
+    return {
+      failureCode: 'PAYMENT_EXPIRED',
+      userMessage: 'Payment authorization prompt timed out. Please try again.',
+    };
+  }
+  return {
+    failureCode: 'PAYMENT_FAILED',
+    userMessage: rawMsg || 'Payment authorization failed or was declined.',
+  };
+}
+
+/**
  * Robust server-side status reconciliation with Lipila.
  * Checks both merchant referenceId and external gateway reference (e.g. LPLXC-...).
  * Automatically updates order store idempotently and triggers email once upon success.
@@ -105,6 +212,9 @@ export async function reconcileOrderStatusWithLipila(
       message: 'Order not found',
     };
   }
+
+  const paymentMethod = order.payment?.method || order.paymentMethod || 'card';
+  const isCard = paymentMethod === 'card';
 
   // Terminal state 1: Already paid
   if (order.paymentStatus === 'successful' || order.orderStatus === 'paid') {
@@ -143,29 +253,27 @@ export async function reconcileOrderStatusWithLipila(
         orderStatus: 'paid',
         message: 'Payment verified and completed successfully.',
       };
-    } else if (hintLower === 'failed' || hintLower === 'declined' || hintLower === 'cancelled') {
-      let failureCode = 'PAYMENT_FAILED';
-      let userMsg = statusHint.message || 'Payment authorization failed or was declined.';
-      const hintMsg = (statusHint.message || '').toLowerCase();
-      if (hintMsg.includes('insufficient') || hintMsg.includes('balance') || hintMsg.includes('funds')) {
-        failureCode = 'INSUFFICIENT_FUNDS';
-        userMsg =
-          'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.';
-      } else if (hintMsg.includes('cancel') || hintMsg.includes('reject') || hintMsg.includes('decline')) {
-        failureCode = 'PAYMENT_CANCELLED';
-        userMsg = 'Payment was declined or cancelled on your mobile device.';
-      } else if (hintMsg.includes('expire') || hintMsg.includes('time')) {
-        failureCode = 'PAYMENT_EXPIRED';
-        userMsg = 'Payment authorization prompt timed out. Please try again.';
-      }
+    } else if (
+      hintLower === 'failed' ||
+      hintLower === 'declined' ||
+      hintLower === 'cancelled' ||
+      hintLower === 'rejected' ||
+      hintLower === 'expired'
+    ) {
+      const { failureCode, userMessage } = classifyPaymentFailure(
+        paymentMethod,
+        hintLower,
+        (statusHint.message || '').toLowerCase(),
+        statusHint.message || ''
+      );
 
-      const failed = markOrderAsFailed(order.orderId, userMsg);
+      const failed = markOrderAsFailed(order.orderId, userMessage);
       return {
         order: failed || order,
         paymentStatus: 'failed',
         orderStatus: 'payment_failed',
         failureReason: failureCode,
-        message: userMsg,
+        message: userMessage,
       };
     }
   }
@@ -275,37 +383,12 @@ export async function reconcileOrderStatusWithLipila(
         msgLower.includes('unauthorized');
 
       if (isFailedStatus || (isFailedMessage && (!check.ok || check.status === 400))) {
-        let failureCode = 'PAYMENT_FAILED';
-        let userMessage = rawMsg || 'Payment authorization failed or was declined.';
-
-        if (
-          statusLower.includes('insufficient') ||
-          msgLower.includes('insufficient') ||
-          msgLower.includes('balance') ||
-          msgLower.includes('funds')
-        ) {
-          failureCode = 'INSUFFICIENT_FUNDS';
-          userMessage =
-            'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.';
-        } else if (
-          statusLower.includes('cancel') ||
-          msgLower.includes('cancel') ||
-          statusLower.includes('reject') ||
-          msgLower.includes('reject') ||
-          statusLower.includes('decline') ||
-          msgLower.includes('decline')
-        ) {
-          failureCode = 'PAYMENT_CANCELLED';
-          userMessage = 'Payment was declined or cancelled on your mobile device.';
-        } else if (
-          statusLower.includes('expire') ||
-          msgLower.includes('expire') ||
-          statusLower.includes('time') ||
-          msgLower.includes('time')
-        ) {
-          failureCode = 'PAYMENT_EXPIRED';
-          userMessage = 'Payment authorization prompt timed out. Please try again.';
-        }
+        const { failureCode, userMessage } = classifyPaymentFailure(
+          paymentMethod,
+          statusLower,
+          msgLower,
+          rawMsg
+        );
 
         const failed = markOrderAsFailed(order.orderId, userMessage);
         return {
@@ -329,7 +412,10 @@ export async function reconcileOrderStatusWithLipila(
           paymentStatus: 'pending',
           orderStatus: 'pending_payment',
           message:
-            rawMsg || 'Payment prompt sent to your mobile phone. Please check and approve the transaction.',
+            rawMsg ||
+            (isCard
+              ? 'Awaiting card authorization and redirect completion...'
+              : 'Payment prompt sent to your mobile phone. Please check and approve the transaction.'),
         };
       }
     } catch (err) {
@@ -347,28 +433,20 @@ export async function reconcileOrderStatusWithLipila(
       hintLower === 'rejected' ||
       hintLower === 'expired'
     ) {
-      let failureCode = 'PAYMENT_FAILED';
-      let userMsg = statusHint.message || 'Payment authorization failed or was declined.';
-      const hintMsg = (statusHint.message || '').toLowerCase();
-      if (hintMsg.includes('insufficient') || hintMsg.includes('balance') || hintMsg.includes('funds')) {
-        failureCode = 'INSUFFICIENT_FUNDS';
-        userMsg =
-          'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.';
-      } else if (hintMsg.includes('cancel') || hintMsg.includes('reject') || hintMsg.includes('decline')) {
-        failureCode = 'PAYMENT_CANCELLED';
-        userMsg = 'Payment was declined or cancelled on your mobile device.';
-      } else if (hintMsg.includes('expire') || hintMsg.includes('time')) {
-        failureCode = 'PAYMENT_EXPIRED';
-        userMsg = 'Payment authorization prompt timed out. Please try again.';
-      }
+      const { failureCode, userMessage } = classifyPaymentFailure(
+        paymentMethod,
+        hintLower,
+        (statusHint.message || '').toLowerCase(),
+        statusHint.message || ''
+      );
 
-      const failed = markOrderAsFailed(order.orderId, userMsg);
+      const failed = markOrderAsFailed(order.orderId, userMessage);
       return {
         order: failed || order,
         paymentStatus: 'failed',
         orderStatus: 'payment_failed',
         failureReason: failureCode,
-        message: userMsg,
+        message: userMessage,
       };
     }
   }
@@ -377,7 +455,9 @@ export async function reconcileOrderStatusWithLipila(
     order,
     paymentStatus: 'pending',
     orderStatus: 'pending_payment',
-    message: 'Awaiting payment authorization...',
+    message: isCard
+      ? 'Awaiting card authorization...'
+      : 'Awaiting payment authorization...',
   };
 }
 
@@ -501,6 +581,10 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         items: Array.isArray(body.items) ? body.items : [],
         paymentMethod: (body.paymentMethod as PaymentMethodType) || 'card',
         customerPhone: body.customerPhone ? String(body.customerPhone) : undefined,
+        customerCountry: body.customerCountry ? String(body.customerCountry) : undefined,
+        customerCity: body.customerCity ? String(body.customerCity) : undefined,
+        customerAddress: body.customerAddress ? String(body.customerAddress) : undefined,
+        customerZip: body.customerZip ? String(body.customerZip) : undefined,
       });
 
       if (!result.success || !result.order) {
@@ -525,11 +609,13 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
       }
 
       // Sanitize client origin for customer return URLs:
-      // Replace accidental Netlify deploy-preview or backend URLs with the production frontend URL
-      let clientOrigin = process.env.STORE_URL || 'https://twokidsdesign-aed2d.web.app';
+      // Return customer to current store origin (production netlify, firebase app, or local dev)
+      let clientOrigin = process.env.STORE_URL || 'https://twokidsdesign2.netlify.app';
       if (
         requestOrigin &&
-        (requestOrigin.startsWith('http://localhost') || requestOrigin.startsWith('http://127.0.0.1'))
+        (ALLOWED_ORIGINS.includes(requestOrigin) ||
+          requestOrigin.startsWith('http://localhost') ||
+          requestOrigin.startsWith('http://127.0.0.1'))
       ) {
         clientOrigin = requestOrigin;
       }
@@ -538,17 +624,18 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
       const nameParts = (order.customerName || 'Valued Creator').trim().split(/\s+/);
       const firstName = nameParts[0] || 'Valued';
       const lastName = nameParts.slice(1).join(' ') || 'Creator';
-      const phone = order.payment.customerPhone || '260970000000';
+      const cleanPhoneDigits = (order.payment.customerPhone || '').replace(/[^\d]/g, '');
+      const phone = cleanPhoneDigits.length >= 9 ? cleanPhoneDigits : '260970000000';
 
-      const lipilaPayload = {
+      const lipilaPayload: LipilaCardCollectionPayload = {
         customerInfo: {
           firstName,
           lastName,
           phoneNumber: phone,
-          city: 'Lusaka',
-          country: 'Zambia',
-          address: 'Digital Download Store',
-          zip: '10101',
+          city: order.customerCity?.trim() || 'Lusaka',
+          country: order.customerCountry?.trim() || 'Zambia',
+          address: order.customerAddress?.trim() || 'Digital Download Store',
+          zip: order.customerZip?.trim() || '10101',
           email: order.customerEmail,
         },
         collectionRequest: {

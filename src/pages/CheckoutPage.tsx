@@ -32,6 +32,8 @@ export const CheckoutPage: React.FC = () => {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('card');
+  const [customerCountry, setCustomerCountry] = useState('Zambia');
+  const [cardPhone, setCardPhone] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(true);
 
@@ -262,7 +264,8 @@ export const CheckoutPage: React.FC = () => {
           licenseTier: i.licenseTier,
         })),
         paymentMethod,
-        customerPhone: paymentMethod === 'mobile_money' ? mobileNumber : undefined,
+        customerPhone: paymentMethod === 'mobile_money' ? mobileNumber : (cardPhone.trim() || undefined),
+        customerCountry: paymentMethod === 'card' ? customerCountry.trim() : 'Zambia',
       });
 
       if (!orderRes.success || !orderRes.order) {
@@ -517,6 +520,60 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               </label>
             </fieldset>
+
+            {/* Card Billing Details (rendered when Card is selected) */}
+            {paymentMethod === 'card' && (
+              <div className="rounded-xl bg-ivory p-4 border border-brandBlue/30 space-y-3 mt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label
+                      htmlFor="card-country"
+                      className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1"
+                    >
+                      Billing Country / Region
+                    </label>
+                    <select
+                      id="card-country"
+                      disabled={isSubmitting}
+                      value={customerCountry}
+                      onChange={e => setCustomerCountry(e.target.value)}
+                      className="w-full rounded-xl border border-charcoal/25 bg-white px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-brandBlue disabled:opacity-60"
+                    >
+                      <option value="Zambia">Zambia</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                      <option value="United States">United States</option>
+                      <option value="South Africa">South Africa</option>
+                      <option value="Zimbabwe">Zimbabwe</option>
+                      <option value="Kenya">Kenya</option>
+                      <option value="Botswana">Botswana</option>
+                      <option value="Australia">Australia</option>
+                      <option value="Canada">Canada</option>
+                      <option value="Other">Other International</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="card-phone"
+                      className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1"
+                    >
+                      Contact Phone (Optional)
+                    </label>
+                    <input
+                      id="card-phone"
+                      type="tel"
+                      disabled={isSubmitting}
+                      value={cardPhone}
+                      onChange={e => setCardPhone(e.target.value)}
+                      placeholder="e.g. +260 971... or +44 7..."
+                      className="w-full rounded-xl border border-charcoal/25 bg-white px-3 py-2.5 text-sm text-charcoal placeholder:text-charcoal/40 font-mono focus:outline-none focus:ring-2 focus:ring-brandBlue disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-charcoal/65 leading-relaxed">
+                  Orders are billed in Zambian Kwacha (ZMW). If your card is issued abroad, your bank automatically converts the total. You will be redirected to Lipila’s official hosted page to enter your card details securely.
+                </p>
+              </div>
+            )}
 
             {/* Mobile Money Number Field (rendered when Mobile Money is selected) */}
             {paymentMethod === 'mobile_money' && (
