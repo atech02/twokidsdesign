@@ -317,11 +317,12 @@ export async function reconcileOrderStatusWithLipila(
         };
       }
 
-      // Explicitly Pending / Processing
+      // Authoritatively Pending / Processing confirmed by Lipila
       if (
-        statusLower === 'pending' ||
+        check.ok &&
+        (statusLower === 'pending' ||
         statusLower === 'in_progress' ||
-        statusLower === 'processing'
+        statusLower === 'processing')
       ) {
         return {
           order,
