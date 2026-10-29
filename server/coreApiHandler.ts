@@ -3,6 +3,7 @@ import {
   createPendingOrder,
   markOrderAsPaid,
   markOrderAsFailed,
+  prepareOrderForPaymentRetry,
   setOrderCardRedirectionUrl,
   setOrderProviderReference,
   rehydrateOrder,
@@ -604,27 +605,46 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         return jsonResponse(404, { success: false, error: 'Order not found for card payment.' }, requestOrigin);
       }
 
-      if (order.orderStatus === 'paid') {
-        return jsonResponse(200, { success: true, order, message: 'Order is already paid.' }, requestOrigin);
+      // 1. Guard against duplicate payments: Check if order is already paid
+      if (order.orderStatus === 'paid' && order.paymentStatus === 'successful') {
+        return jsonResponse(200, {
+          success: true,
+          order,
+          alreadyPaid: true,
+          message: 'Order is already paid. Download links are available.',
+        }, requestOrigin);
       }
 
-      // Sanitize client origin for customer return URLs:
-      // Return customer to current store origin (production netlify, firebase app, or local dev)
-      let clientOrigin = process.env.STORE_URL || 'https://twokidsdesign2.netlify.app';
+      // 2. Reconcile with provider before re-initiating: previous attempt may have succeeded
+      const check = await reconcileOrderStatusWithLipila(order.orderId);
+      if (check.orderStatus === 'paid' || check.paymentStatus === 'successful') {
+        return jsonResponse(200, {
+          success: true,
+          order: check.order || order,
+          alreadyPaid: true,
+          message: 'Payment verified and completed successfully.',
+        }, requestOrigin);
+      }
+
+      // 3. Prepare order for fresh retry attempt with a unique Lipila attempt reference
+      const readyOrder = prepareOrderForPaymentRetry(order.orderId, 'card') || order;
+
+      // Ensure customer return URL targets the approved production Netlify domain, or local dev
+      let clientOrigin = 'https://twokidsdesign2.netlify.app';
       if (
         requestOrigin &&
-        (ALLOWED_ORIGINS.includes(requestOrigin) ||
-          requestOrigin.startsWith('http://localhost') ||
-          requestOrigin.startsWith('http://127.0.0.1'))
+        (requestOrigin.startsWith('http://localhost') ||
+          requestOrigin.startsWith('http://127.0.0.1') ||
+          requestOrigin.includes('twokidsdesign2.netlify.app'))
       ) {
         clientOrigin = requestOrigin;
       }
-      const backUrl = `${clientOrigin.replace(/\/$/, '')}/order-confirmation/${encodeURIComponent(order.orderId)}`;
+      const backUrl = `${clientOrigin.replace(/\/$/, '')}/order-confirmation/${encodeURIComponent(readyOrder.orderId)}`;
 
-      const nameParts = (order.customerName || 'Valued Creator').trim().split(/\s+/);
+      const nameParts = (readyOrder.customerName || 'Valued Creator').trim().split(/\s+/);
       const firstName = nameParts[0] || 'Valued';
       const lastName = nameParts.slice(1).join(' ') || 'Creator';
-      const cleanPhoneDigits = (order.payment.customerPhone || '').replace(/[^\d]/g, '');
+      const cleanPhoneDigits = (readyOrder.payment.customerPhone || '').replace(/[^\d]/g, '');
       const phone = cleanPhoneDigits.length >= 9 ? cleanPhoneDigits : '260970000000';
 
       const lipilaPayload: LipilaCardCollectionPayload = {
@@ -632,20 +652,20 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
           firstName,
           lastName,
           phoneNumber: phone,
-          city: order.customerCity?.trim() || 'Lusaka',
-          country: order.customerCountry?.trim() || 'Zambia',
-          address: order.customerAddress?.trim() || 'Digital Download Store',
-          zip: order.customerZip?.trim() || '10101',
-          email: order.customerEmail,
+          city: readyOrder.customerCity?.trim() || 'Lusaka',
+          country: readyOrder.customerCountry?.trim() || 'Zambia',
+          address: readyOrder.customerAddress?.trim() || 'Digital Download Store',
+          zip: readyOrder.customerZip?.trim() || '10101',
+          email: readyOrder.customerEmail,
         },
         collectionRequest: {
-          referenceId: order.referenceId,
-          amount: order.total,
-          narration: `Two Kids Design order ${order.orderId}`,
+          referenceId: readyOrder.referenceId,
+          amount: readyOrder.total,
+          narration: `Two Kids Design order ${readyOrder.orderId}`,
           accountNumber: phone,
           currency: 'ZMW' as const,
           backUrl,
-          referenceData: order.orderId,
+          referenceData: readyOrder.orderId,
         },
       };
 
@@ -657,17 +677,18 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
           error:
             lipilaResult.error ||
             'Lipila card checkout initialization failed. Please try again or use mobile money.',
-          referenceId: order.referenceId,
+          referenceId: readyOrder.referenceId,
         }, requestOrigin);
       }
 
-      setOrderCardRedirectionUrl(order.orderId, lipilaResult.data.cardRedirectionUrl);
+      setOrderCardRedirectionUrl(readyOrder.orderId, lipilaResult.data.cardRedirectionUrl);
 
       return jsonResponse(200, {
         success: true,
-        orderId: order.orderId,
-        referenceId: order.referenceId,
+        orderId: readyOrder.orderId,
+        referenceId: readyOrder.referenceId,
         cardRedirectionUrl: lipilaResult.data.cardRedirectionUrl,
+        backUrl,
       }, requestOrigin);
     }
 
@@ -675,11 +696,32 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
     if (method === 'POST' && pathname === '/api/payments/lipila/mobile-money') {
       const body = req.body || {};
       const orderId = String(body.orderId || '');
-      const accountNumber = String(body.accountNumber || '').replace(/\s+-]/g, '');
+      const accountNumber = String(body.accountNumber || '').replace(/[\s+-]/g, '');
 
       const order = getOrderByOrderId(orderId);
       if (!order) {
         return jsonResponse(404, { success: false, error: 'Order not found for mobile money payment.' }, requestOrigin);
+      }
+
+      // 1. Guard against duplicate payments: Check if order is already paid
+      if (order.orderStatus === 'paid' && order.paymentStatus === 'successful') {
+        return jsonResponse(200, {
+          success: true,
+          order,
+          alreadyPaid: true,
+          message: 'Order is already paid. Download links are available.',
+        }, requestOrigin);
+      }
+
+      // 2. Reconcile with provider before re-initiating: previous attempt may have succeeded
+      const check = await reconcileOrderStatusWithLipila(order.orderId);
+      if (check.orderStatus === 'paid' || check.paymentStatus === 'successful') {
+        return jsonResponse(200, {
+          success: true,
+          order: check.order || order,
+          alreadyPaid: true,
+          message: 'Payment verified and completed successfully.',
+        }, requestOrigin);
       }
 
       const cleanDigits = accountNumber.replace(/[^\d]/g, '');
@@ -698,14 +740,18 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         standardizedPhone = `260${cleanDigits}`;
       }
 
+      // 3. Prepare order for fresh mobile money attempt with fresh Lipila reference
+      const readyOrder = prepareOrderForPaymentRetry(order.orderId, 'mobile_money') || order;
+      readyOrder.payment.customerPhone = standardizedPhone;
+
       const lipilaPayload = {
-        referenceId: order.referenceId,
-        amount: order.total,
-        narration: `Two Kids Design order ${order.orderId}`,
+        referenceId: readyOrder.referenceId,
+        amount: readyOrder.total,
+        narration: `Two Kids Design order ${readyOrder.orderId}`,
         accountNumber: standardizedPhone,
         currency: 'ZMW' as const,
-        email: order.customerEmail,
-        referenceData: order.orderId,
+        email: readyOrder.customerEmail,
+        referenceData: readyOrder.orderId,
       };
 
       const lipilaResult = await lipilaClient.initiateMobileMoneyCollection(lipilaPayload);
@@ -728,7 +774,7 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
           errMsg =
             'Payment failed — insufficient mobile money balance. Please top up your Airtel Money wallet and try again.';
         }
-        markOrderAsFailed(order.orderId, errMsg);
+        markOrderAsFailed(readyOrder.orderId, errMsg);
         return jsonResponse(clientStatus, {
           success: false,
           error: errMsg,
@@ -747,15 +793,15 @@ export async function handleCoreApiRequest(req: CoreApiRequest): Promise<CoreApi
         ''
       ).trim();
 
-      if (providerRef && providerRef !== order.referenceId) {
-        setOrderProviderReference(order.orderId, providerRef);
+      if (providerRef && providerRef !== readyOrder.referenceId) {
+        setOrderProviderReference(readyOrder.orderId, providerRef);
       }
 
       return jsonResponse(200, {
         success: true,
-        orderId: order.orderId,
-        referenceId: order.referenceId,
-        providerReference: providerRef || order.referenceId,
+        orderId: readyOrder.orderId,
+        referenceId: readyOrder.referenceId,
+        providerReference: providerRef || readyOrder.referenceId,
         message:
           lipilaResult.data?.message ||
           'Payment prompt sent to your mobile phone. Please check and approve the transaction.',

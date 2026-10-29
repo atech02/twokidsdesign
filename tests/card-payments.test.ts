@@ -258,8 +258,179 @@ async function runCardPaymentTests() {
   assert.ok(momoFailReconcile.message?.includes('Airtel Money'));
   console.log('PASS [Test 8]: Mobile Money reconciliation remains fully functional without regression.\n');
 
+  // --------------------------------------------------------------------------
+  // TEST 9: Failed Card Payment Followed by Card Retry
+  // --------------------------------------------------------------------------
+  console.log('--- TEST 9: Failed Card Payment Followed by Card Retry ---');
+  const orderRes9 = createPendingOrder({
+    idempotencyKey: `CARD-TEST-RETRY-${Date.now()}`,
+    customerEmail: 'retry.card@example.com',
+    customerName: 'Retry Customer',
+    items: [{ productId: 'tkd-bundle-01', licenseTier: 'standard' }],
+    paymentMethod: 'card',
+    customerCountry: 'Zambia',
+  });
+  const order9 = orderRes9.order!;
+
+  // 1. Initial attempt fails
+  await reconcileOrderStatusWithLipila(order9.orderId, {
+    status: 'Declined',
+    message: 'Card was declined by issuing bank',
+  });
+  const failedOrder9 = getOrderByOrderId(order9.orderId);
+  assert.equal(failedOrder9?.orderStatus, 'payment_failed');
+  assert.equal(failedOrder9?.items[0].downloadToken, '');
+
+  // 2. Customer clicks "Try Card Payment Again" on order recovery page
+  const retryCardReq = new Request('https://twokidsdesign2.netlify.app/api/payments/lipila/card', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId: order9.orderId }),
+  });
+  const retryCardRes = await netlifyV2Handler(retryCardReq);
+  assert.equal(retryCardRes.status, 200);
+  const retryCardData = await retryCardRes.json();
+  assert.ok(retryCardData.success);
+  assert.ok(retryCardData.cardRedirectionUrl);
+  // Verify order transitioned back to pending_payment with fresh referenceId
+  const retriedOrder9 = getOrderByOrderId(order9.orderId);
+  assert.equal(retriedOrder9?.orderStatus, 'pending_payment');
+  assert.notEqual(retriedOrder9?.referenceId, order9.referenceId, 'Must assign fresh attempt reference');
+  // Downloads must remain locked
+  assert.equal(retriedOrder9?.items[0].downloadToken, '');
+  console.log('PASS [Test 9]: Failed card payment successfully retried with fresh reference and locked downloads.\n');
+
+  // --------------------------------------------------------------------------
+  // TEST 10: Customer Leaving PrimeNet Pay & Returning While Order is Pending
+  // --------------------------------------------------------------------------
+  console.log('--- TEST 10: Abandoned PrimeNet Pay Session / Pending Return ---');
+  const orderRes10 = createPendingOrder({
+    idempotencyKey: `CARD-TEST-ABANDON-${Date.now()}`,
+    customerEmail: 'abandon.customer@example.com',
+    customerName: 'Browsing Customer',
+    items: [{ productId: 'tkd-bundle-01', licenseTier: 'standard' }],
+    paymentMethod: 'card',
+  });
+  const order10 = orderRes10.order!;
+
+  // Customer returns to order-confirmation page: triggers GET /api/orders/:orderId/status
+  const statusReq10 = new Request(`https://twokidsdesign2.netlify.app/api/orders/${order10.orderId}/status`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const statusRes10 = await netlifyV2Handler(statusReq10);
+  assert.equal(statusRes10.status, 200);
+  const statusData10 = await statusRes10.json();
+  assert.equal(statusData10.orderStatus, 'pending_payment');
+  assert.equal(statusData10.paymentStatus, 'pending');
+  assert.equal(statusData10.order.items[0].downloadToken, '', 'Pending order must never release downloads');
+  console.log('PASS [Test 10]: Customer returning from abandoned checkout cleanly resolves pending status without granting downloads.\n');
+
+  // --------------------------------------------------------------------------
+  // TEST 11: Returning to Already Successful Order Without Creating New Payment
+  // --------------------------------------------------------------------------
+  console.log('--- TEST 11: Already Paid Order Safeguard ---');
+  const orderRes11 = createPendingOrder({
+    idempotencyKey: `CARD-TEST-ALREADYPAID-${Date.now()}`,
+    customerEmail: 'alreadypaid@example.com',
+    customerName: 'Paid Creator',
+    items: [{ productId: 'tkd-bundle-01', licenseTier: 'standard' }],
+    paymentMethod: 'card',
+  });
+  const order11 = orderRes11.order!;
+  markOrderAsPaid(order11.orderId, 'LPLXC-PAID-ALREADY-999');
+
+  // Attempting to retry card on already paid order
+  const retryPaidCardReq = new Request('https://twokidsdesign2.netlify.app/api/payments/lipila/card', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId: order11.orderId }),
+  });
+  const retryPaidCardRes = await netlifyV2Handler(retryPaidCardReq);
+  assert.equal(retryPaidCardRes.status, 200);
+  const retryPaidCardData = await retryPaidCardRes.json();
+  assert.ok(retryPaidCardData.success);
+  assert.equal(retryPaidCardData.alreadyPaid, true);
+  assert.equal(retryPaidCardData.order.orderStatus, 'paid');
+
+  // Attempting to initiate mobile money on already paid order
+  const retryPaidMomoReq = new Request('https://twokidsdesign2.netlify.app/api/payments/lipila/mobile-money', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId: order11.orderId, accountNumber: '0977112233' }),
+  });
+  const retryPaidMomoRes = await netlifyV2Handler(retryPaidMomoReq);
+  assert.equal(retryPaidMomoRes.status, 200);
+  const retryPaidMomoData = await retryPaidMomoRes.json();
+  assert.ok(retryPaidMomoData.success);
+  assert.equal(retryPaidMomoData.alreadyPaid, true);
+  console.log('PASS [Test 11]: Already paid order blocks duplicate payment creation for both card and mobile money.\n');
+
+  // --------------------------------------------------------------------------
+  // TEST 12: Switching from Card Payment to Mobile Money
+  // --------------------------------------------------------------------------
+  console.log('--- TEST 12: Switching from Card to Mobile Money ---');
+  const orderRes12 = createPendingOrder({
+    idempotencyKey: `CARD-TEST-SWITCH-${Date.now()}`,
+    customerEmail: 'switch.payment@example.com',
+    customerName: 'Flexible Creator',
+    items: [{ productId: 'tkd-bundle-02', licenseTier: 'commercial' }],
+    paymentMethod: 'card',
+    customerCountry: 'Zambia',
+  });
+  const order12 = orderRes12.order!;
+
+  // Customer clicks "Pay with Mobile Money" on order confirmation page
+  const switchMomoReq = new Request('https://twokidsdesign2.netlify.app/api/payments/lipila/mobile-money', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId: order12.orderId, accountNumber: '0971234567' }),
+  });
+  const switchMomoRes = await netlifyV2Handler(switchMomoReq);
+  assert.equal(switchMomoRes.status, 200);
+  const switchMomoData = await switchMomoRes.json();
+  assert.ok(switchMomoData.success);
+  assert.ok(switchMomoData.providerReference);
+
+  const switchedOrder12 = getOrderByOrderId(order12.orderId);
+  assert.equal(switchedOrder12?.paymentMethod, 'mobile_money');
+  assert.equal(switchedOrder12?.orderStatus, 'pending_payment');
+  assert.equal(switchedOrder12?.items[0].downloadToken, '', 'Must remain locked until approved');
+  console.log('PASS [Test 12]: Seamless switch from card to mobile money updates payment method and initiates prompt cleanly.\n');
+
+  // --------------------------------------------------------------------------
+  // TEST 13: Production backUrl Generation & Formatting
+  // --------------------------------------------------------------------------
+  console.log('--- TEST 13: Production backUrl Format & Validation ---');
+  const orderRes13 = createPendingOrder({
+    idempotencyKey: `CARD-TEST-BACKURL-${Date.now()}`,
+    customerEmail: 'backurl.test@example.com',
+    customerName: 'BackUrl Verifier',
+    items: [{ productId: 'tkd-bundle-01', licenseTier: 'standard' }],
+    paymentMethod: 'card',
+  });
+  const order13 = orderRes13.order!;
+
+  const backUrlReq = new Request('https://twokidsdesign2.netlify.app/api/payments/lipila/card', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Origin': 'https://twokidsdesign2.netlify.app',
+    },
+    body: JSON.stringify({ orderId: order13.orderId }),
+  });
+  const backUrlRes = await netlifyV2Handler(backUrlReq);
+  assert.equal(backUrlRes.status, 200);
+  const backUrlData = await backUrlRes.json();
+  assert.ok(backUrlData.backUrl, 'Must return backUrl in payload');
+  const expectedUrl = `https://twokidsdesign2.netlify.app/order-confirmation/${order13.orderId}`;
+  assert.equal(backUrlData.backUrl, expectedUrl);
+  assert.ok(!backUrlData.backUrl.includes('{orderId}'), 'Must not contain literal {orderId} placeholder');
+  assert.ok(!backUrlData.backUrl.includes('web.app'), 'Must never default to legacy Firebase web.app domain');
+  console.log('PASS [Test 13]: Production backUrl strictly uses twokidsdesign2.netlify.app with exact order ID.\n');
+
   console.log('================================================================');
-  console.log('ALL 8 CARD PAYMENT AUDIT TESTS PASSED SUCCESSFULLY!');
+  console.log('ALL 13 CARD PAYMENT & RETRY RECOVERY TESTS PASSED SUCCESSFULLY!');
   console.log('================================================================');
 }
 

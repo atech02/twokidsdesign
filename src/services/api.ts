@@ -189,12 +189,16 @@ export async function initiateLipilaCardPayment(orderId: string): Promise<{
   error?: string;
   cardRedirectionUrl?: string;
   referenceId?: string;
+  alreadyPaid?: boolean;
+  order?: OrderRecord;
 }> {
   const res = await safeFetchJson<{
     success: boolean;
     error?: string;
     cardRedirectionUrl?: string;
     referenceId?: string;
+    alreadyPaid?: boolean;
+    order?: OrderRecord;
   }>('/api/payments/lipila/card', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -207,6 +211,8 @@ export async function initiateLipilaCardPayment(orderId: string): Promise<{
       error: res.data.error,
       cardRedirectionUrl: res.data.cardRedirectionUrl,
       referenceId: res.data.referenceId,
+      alreadyPaid: res.data.alreadyPaid,
+      order: res.data.order,
     };
   }
 
@@ -236,6 +242,8 @@ export async function initiateLipilaMobileMoneyPayment(
   message?: string;
   referenceId?: string;
   providerReference?: string;
+  alreadyPaid?: boolean;
+  order?: OrderRecord;
 }> {
   const cleanPhone = accountNumber.replace(/[\s+-]/g, '');
   if (!cleanPhone || cleanPhone.length < 9) {
@@ -252,6 +260,8 @@ export async function initiateLipilaMobileMoneyPayment(
     referenceId?: string;
     providerReference?: string;
     orderId?: string;
+    alreadyPaid?: boolean;
+    order?: OrderRecord;
   }>('/api/payments/lipila/mobile-money', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -265,6 +275,8 @@ export async function initiateLipilaMobileMoneyPayment(
       message: res.data.message,
       referenceId: res.data.referenceId,
       providerReference: res.data.providerReference,
+      alreadyPaid: res.data.alreadyPaid,
+      order: res.data.order,
     };
   }
 

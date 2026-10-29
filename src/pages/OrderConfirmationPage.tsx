@@ -9,8 +9,11 @@ import {
   AlertCircle,
   XCircle,
   ArrowRight,
+  ArrowLeft,
   Mail,
   Clock,
+  CreditCard,
+  Smartphone,
 } from 'lucide-react';
 import type { OrderRecord, OrderLineItem } from '../../server/orderStore';
 import { getProductById } from '../data/products';
@@ -20,6 +23,8 @@ import {
   triggerProtectedPdfDownload,
   refreshOrderTokensRequest,
   resendConfirmationEmailRequest,
+  initiateLipilaCardPayment,
+  initiateLipilaMobileMoneyPayment,
 } from '../services/api';
 
 export const OrderConfirmationPage: React.FC = () => {
@@ -135,6 +140,94 @@ export const OrderConfirmationPage: React.FC = () => {
   const [resendingEmail, setResendingEmail] = useState<boolean>(false);
   const [emailStatusNote, setEmailStatusNote] = useState<string | null>(null);
 
+  // Card / Mobile Money Retry State
+  const [isRetryingCard, setIsRetryingCard] = useState<boolean>(false);
+  const [showMomoForm, setShowMomoForm] = useState<boolean>(false);
+  const [momoPhone, setMomoPhone] = useState<string>('');
+  const [isSubmittingMomo, setIsSubmittingMomo] = useState<boolean>(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [promptSentNotice, setPromptSentNotice] = useState<string | null>(null);
+
+  const handleRetryCard = async () => {
+    if (!order || isRetryingCard) return;
+    setIsRetryingCard(true);
+    setRetryError(null);
+
+    try {
+      const res = await initiateLipilaCardPayment(order.orderId);
+
+      // 1. If previous payment already succeeded
+      if (res.alreadyPaid || res.order?.orderStatus === 'paid') {
+        if (res.order) setOrder(res.order);
+        setIsRetryingCard(false);
+        return;
+      }
+
+      if (res.success && res.cardRedirectionUrl) {
+        // In local sandbox mock mode, simulate redirect return
+        if (res.cardRedirectionUrl.includes('sandbox_card_redirect=true')) {
+          setLoading(true);
+          setTimeout(async () => {
+            const checked = await checkOrderStatus(order.orderId);
+            if (checked.order) setOrder(checked.order);
+            setLoading(false);
+          }, 1500);
+          return;
+        }
+
+        // Live production redirect to Lipila-hosted PrimeNet Pay
+        window.location.href = res.cardRedirectionUrl;
+        return;
+      }
+
+      setRetryError(res.error || 'Failed to initialize card payment session. Please try again or use mobile money.');
+    } catch {
+      setRetryError('Unable to connect to payment server. Please try again.');
+    } finally {
+      setIsRetryingCard(false);
+    }
+  };
+
+  const handlePayWithMomo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order || isSubmittingMomo) return;
+
+    const cleanPhone = momoPhone.replace(/[\s+-]/g, '');
+    if (!cleanPhone || cleanPhone.length < 9) {
+      setRetryError('Please enter a valid Zambian mobile money number (e.g. 0971234567 or 260971234567).');
+      return;
+    }
+
+    setIsSubmittingMomo(true);
+    setRetryError(null);
+
+    try {
+      const res = await initiateLipilaMobileMoneyPayment(order.orderId, cleanPhone);
+
+      // If order was already paid
+      if (res.alreadyPaid || res.order?.orderStatus === 'paid') {
+        if (res.order) setOrder(res.order);
+        setIsSubmittingMomo(false);
+        return;
+      }
+
+      if (res.success) {
+        setPromptSentNotice(
+          res.message || `Payment prompt sent to ${cleanPhone}. Please approve the transaction on your phone.`
+        );
+        setShowMomoForm(false);
+        const checked = await checkOrderStatus(order.orderId);
+        if (checked.order) setOrder(checked.order);
+      } else {
+        setRetryError(res.error || 'Failed to dispatch mobile money prompt. Please verify your number.');
+      }
+    } catch {
+      setRetryError('Unable to reach payment server. Please try again.');
+    } finally {
+      setIsSubmittingMomo(false);
+    }
+  };
+
   const handleRefreshLinks = async () => {
     if (!order) return;
     const res = await refreshOrderTokensRequest(order.orderId, order.customerEmail);
@@ -215,18 +308,33 @@ export const OrderConfirmationPage: React.FC = () => {
             </div>
             <div className="space-y-1">
               <span className="text-xs font-bold uppercase tracking-widest text-red-600">
-                PAYMENT AUTHORIZATION DECLINED
+                PAYMENT UNSUCCESSFUL
               </span>
               <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-charcoal">
-                {isMobileMoney
-                  ? 'Your Mobile Money Payment Could Not Be Completed'
-                  : 'Your Card Payment Could Not Be Completed'}
+                Payment unsuccessful
               </h1>
               <p className="text-xs sm:text-sm text-charcoal/75">
-                Order ID: <strong className="font-mono text-charcoal">{order.orderId}</strong> · Reference: <strong className="font-mono text-charcoal">{order.referenceId}</strong>
+                Your payment for order <strong className="font-mono text-charcoal">{order.orderId}</strong> was not completed.
               </p>
             </div>
           </div>
+
+          {retryError && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-xs sm:text-sm text-red-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{retryError}</span>
+            </div>
+          )}
+
+          {promptSentNotice && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs sm:text-sm text-emerald-900 flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">{promptSentNotice}</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Please check your phone screen and enter your PIN now. This page will update automatically once confirmed.</p>
+              </div>
+            </div>
+          )}
 
           <div className="rounded-2xl bg-amber-50/70 border border-amber-200 p-5 space-y-2 text-xs sm:text-sm text-charcoal/80">
             <h3 className="font-bold text-charcoal flex items-center gap-2">
@@ -259,17 +367,93 @@ export const OrderConfirmationPage: React.FC = () => {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Link
-              to="/checkout"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-6 py-3.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs"
+          {/* Inline Mobile Money Form */}
+          {showMomoForm && (
+            <form onSubmit={handlePayWithMomo} className="rounded-2xl bg-brandBlue-light/40 border border-brandBlue/30 p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-brandBlue-dark" />
+                <h4 className="font-heading font-bold text-sm text-charcoal">
+                  Pay with Zambian Mobile Money
+                </h4>
+              </div>
+              <p className="text-xs text-charcoal/75">
+                Enter your Airtel Money, MTN Mobile Money, or Zamtel phone number. You will receive an instant prompt on your handset to enter your PIN.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="tel"
+                  required
+                  disabled={isSubmittingMomo}
+                  value={momoPhone}
+                  onChange={e => setMomoPhone(e.target.value)}
+                  placeholder="e.g. 0971234567 or 260971234567"
+                  className="flex-1 rounded-xl border border-charcoal/25 bg-white px-4 py-2.5 text-sm text-charcoal font-mono placeholder:text-charcoal/40 focus:outline-none focus:ring-2 focus:ring-brandBlue disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={isSubmittingMomo}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-5 py-2.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors disabled:opacity-60"
+                >
+                  {isSubmittingMomo ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-brandBlue" />
+                      <span>Sending Prompt...</span>
+                    </>
+                  ) : (
+                    <span>Send Payment Prompt</span>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-charcoal/60">
+                Supported networks: Airtel Money · MTN Mobile Money · Zamtel Kwacha
+              </p>
+            </form>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleRetryCard}
+              disabled={isRetryingCard}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-5 py-3 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs disabled:opacity-60"
             >
-              <span>{isMobileMoney ? 'Try Again with Mobile Money or Card' : 'Try Again or Pay with Mobile Money'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {isRetryingCard ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-brandBlue" />
+                  <span>Connecting to Card Checkout...</span>
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4 text-brandBlue" />
+                  <span>Try Card Payment Again</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowMomoForm(prev => !prev);
+                setRetryError(null);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-ivory px-5 py-3 text-sm font-semibold text-charcoal hover:bg-white border border-charcoal/15 transition-colors shadow-xs"
+            >
+              <Smartphone className="w-4 h-4 text-brandBlue-dark" />
+              <span>{showMomoForm ? 'Hide Mobile Money' : 'Pay with Mobile Money'}</span>
+            </button>
+
+            <Link
+              to="/shop"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 text-charcoal/60" />
+              <span>Return to Shop</span>
             </Link>
+
             <a
               href="mailto:support@twokidsdesign.com"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-charcoal/80 hover:bg-softGrey border border-charcoal/15 transition-colors"
             >
               <Mail className="w-4 h-4 text-brandBlue" />
               <span>Contact Support</span>
@@ -280,7 +464,7 @@ export const OrderConfirmationPage: React.FC = () => {
     );
   }
 
-  // Awaiting Payment Confirmation State
+  // Awaiting Payment / Payment Not Completed State
   if (order.orderStatus === 'pending_payment') {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
@@ -291,10 +475,10 @@ export const OrderConfirmationPage: React.FC = () => {
             </div>
             <div className="space-y-1">
               <span className="text-xs font-bold uppercase tracking-widest text-amber-600">
-                AWAITING PAYMENT CONFIRMATION
+                PAYMENT NOT COMPLETED
               </span>
               <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-charcoal">
-                Verifying Your Transaction...
+                Payment not completed
               </h1>
               <p className="text-xs sm:text-sm text-charcoal/75">
                 Order Reference: <strong className="font-mono text-charcoal">{order.orderId}</strong> · Amount: <strong className="text-charcoal">{order.currency} {order.total.toFixed(2)}</strong>
@@ -302,14 +486,108 @@ export const OrderConfirmationPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-ivory border border-charcoal/10 p-5 space-y-2 text-xs sm:text-sm text-charcoal/80">
-            <p>
-              If you just submitted your card or mobile money details, we are actively checking confirmation with Lipila.
-              Your licensed download links will appear here automatically once payment is verified.
+          {retryError && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-xs sm:text-sm text-red-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{retryError}</span>
+            </div>
+          )}
+
+          {promptSentNotice && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs sm:text-sm text-emerald-900 flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">{promptSentNotice}</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Please check your phone screen and enter your PIN now. This page will update automatically once confirmed.</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-amber-50/60 border border-amber-200/80 p-5 space-y-2 text-xs sm:text-sm text-charcoal/80">
+            <p className="font-medium text-charcoal">
+              Your payment has not been confirmed. You can retry your payment or choose another payment method.
+            </p>
+            <p className="text-charcoal/70 leading-relaxed">
+              If you just submitted your card details or authorized a mobile money prompt, our server may still be awaiting confirmation from Lipila. Click <strong>Check Status Now</strong> below to check. If you left or closed the payment checkout before finishing, you can retry your card payment or switch to mobile money.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          {/* Inline Mobile Money Form */}
+          {showMomoForm && (
+            <form onSubmit={handlePayWithMomo} className="rounded-2xl bg-brandBlue-light/40 border border-brandBlue/30 p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-brandBlue-dark" />
+                <h4 className="font-heading font-bold text-sm text-charcoal">
+                  Pay with Zambian Mobile Money
+                </h4>
+              </div>
+              <p className="text-xs text-charcoal/75">
+                Enter your Airtel Money, MTN Mobile Money, or Zamtel phone number. You will receive an instant prompt on your handset to enter your PIN.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="tel"
+                  required
+                  disabled={isSubmittingMomo}
+                  value={momoPhone}
+                  onChange={e => setMomoPhone(e.target.value)}
+                  placeholder="e.g. 0971234567 or 260971234567"
+                  className="flex-1 rounded-xl border border-charcoal/25 bg-white px-4 py-2.5 text-sm text-charcoal font-mono placeholder:text-charcoal/40 focus:outline-none focus:ring-2 focus:ring-brandBlue disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={isSubmittingMomo}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-5 py-2.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors disabled:opacity-60"
+                >
+                  {isSubmittingMomo ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-brandBlue" />
+                      <span>Sending Prompt...</span>
+                    </>
+                  ) : (
+                    <span>Send Payment Prompt</span>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-charcoal/60">
+                Supported networks: Airtel Money · MTN Mobile Money · Zamtel Kwacha
+              </p>
+            </form>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleRetryCard}
+              disabled={isRetryingCard}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-5 py-3 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs disabled:opacity-60"
+            >
+              {isRetryingCard ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-brandBlue" />
+                  <span>Connecting to Card Checkout...</span>
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4 text-brandBlue" />
+                  <span>Try Card Payment Again</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowMomoForm(prev => !prev);
+                setRetryError(null);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-ivory px-5 py-3 text-sm font-semibold text-charcoal hover:bg-white border border-charcoal/15 transition-colors shadow-xs"
+            >
+              <Smartphone className="w-4 h-4 text-brandBlue-dark" />
+              <span>{showMomoForm ? 'Hide Mobile Money' : 'Pay with Mobile Money'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -319,16 +597,18 @@ export const OrderConfirmationPage: React.FC = () => {
                   setLoading(false);
                 });
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-charcoal px-6 py-3.5 text-sm font-semibold text-white hover:bg-brandBlue-dark transition-colors shadow-xs"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors shadow-xs"
             >
               <RefreshCw className="w-4 h-4 text-brandBlue" />
               <span>Check Status Now</span>
             </button>
+
             <Link
-              to="/downloads"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors"
+              to="/shop"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-charcoal hover:bg-softGrey border border-charcoal/15 transition-colors"
             >
-              <span>Go to Order Lookup</span>
+              <ArrowLeft className="w-4 h-4 text-charcoal/60" />
+              <span>Return to Shop</span>
             </Link>
           </div>
         </div>

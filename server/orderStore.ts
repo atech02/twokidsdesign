@@ -498,6 +498,50 @@ export function setOrderProviderReference(
 }
 
 /**
+ * Reset a pending or failed order for payment retry (card or mobile money).
+ * Generates a fresh provider referenceId for Lipila and maps it immediately.
+ * Never modifies an order that is already paid.
+ */
+export function prepareOrderForPaymentRetry(
+  orderId: string,
+  newMethod?: PaymentMethodType
+): OrderRecord | undefined {
+  loadPersistedOrders();
+  const clean = orderId.trim();
+  let order = ordersById.get(clean);
+  if (!order) {
+    const foundId = ordersByReferenceId.get(clean);
+    if (foundId) order = ordersById.get(foundId);
+  }
+  if (!order) return undefined;
+
+  // Never downgrade or mutate an already paid order
+  if (order.orderStatus === 'paid' && order.paymentStatus === 'successful') {
+    return order;
+  }
+
+  // Generate fresh referenceId for this attempt
+  const newRef = `LIP-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  order.referenceId = newRef;
+  order.orderStatus = 'pending_payment';
+  order.paymentStatus = 'pending';
+  if (newMethod) {
+    order.paymentMethod = newMethod;
+    order.payment.method = newMethod;
+  }
+  order.payment.referenceId = newRef;
+  order.payment.status = 'pending';
+  order.payment.errorMessage = undefined;
+  order.payment.cardRedirectionUrl = undefined;
+  order.updatedAt = new Date().toISOString();
+
+  ordersById.set(order.orderId, order);
+  ordersByReferenceId.set(newRef, order.orderId);
+  persistOrders();
+  return order;
+}
+
+/**
  * Rehydrate a pending order into memory & disk cache for serverless container resilience
  */
 export function rehydrateOrder(incoming: OrderRecord): OrderRecord {
